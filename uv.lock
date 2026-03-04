@@ -507,7 +507,7 @@ wheels = [
 [[package]]
 name = "peakguard"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "commitizen" },
     { name = "pre-commit" },
