@@ -5,12 +5,15 @@ all interaction with the yfinance library and converts raw data
 into domain-friendly PriceResult objects.
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 
 import yfinance
 
 from errors import FetchError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -65,3 +68,26 @@ def fetch_price(ticker: str) -> PriceResult:
     trade_date: date = history.index[-1].date()
 
     return PriceResult(ticker=ticker, price=close_price, fetched_at=trade_date)
+
+
+def fetch_prices(tickers: list[str]) -> list[PriceResult]:
+    """Fetch the latest close prices for multiple tickers.
+
+    Iterates through each ticker and calls fetch_price individually.
+    If a single ticker fails, the error is logged and that ticker
+    is skipped — the remaining tickers are still processed.
+
+    Args:
+        tickers: A list of ticker symbol strings.
+
+    Returns:
+        A list of PriceResult for each successfully fetched ticker.
+        May be shorter than the input list if some tickers failed.
+    """
+    results: list[PriceResult] = []
+    for ticker in tickers:
+        try:
+            results.append(fetch_price(ticker))
+        except FetchError as exc:
+            logger.warning("Failed to fetch %s: %s", ticker, exc)
+    return results
