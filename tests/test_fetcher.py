@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from errors import FetchError
-from fetcher import PriceResult, fetch_price, fetch_prices
+from peakguard.errors import FetchError
+from peakguard.fetcher import PriceResult, fetch_price, fetch_prices
 
 
 class TestPriceResult:
@@ -44,7 +44,7 @@ class TestFetchPrice:
         )
         mock_ticker = MagicMock()
         mock_ticker.history.return_value = mock_history
-        mocker.patch("fetcher.yfinance.Ticker", return_value=mock_ticker)
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
 
         result = fetch_price("AAPL")
 
@@ -57,7 +57,7 @@ class TestFetchPrice:
         """yfinance returns empty DataFrame (e.g., invalid ticker, no data)."""
         mock_ticker = MagicMock()
         mock_ticker.history.return_value = pd.DataFrame()
-        mocker.patch("fetcher.yfinance.Ticker", return_value=mock_ticker)
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
 
         with pytest.raises(FetchError, match="INVALID"):
             fetch_price("INVALID")
@@ -66,7 +66,7 @@ class TestFetchPrice:
         """Network errors from yfinance are wrapped in FetchError."""
         mock_ticker = MagicMock()
         mock_ticker.history.side_effect = ConnectionError("network down")
-        mocker.patch("fetcher.yfinance.Ticker", return_value=mock_ticker)
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
 
         with pytest.raises(FetchError, match="MSFT") as exc_info:
             fetch_price("MSFT")
@@ -101,7 +101,7 @@ class TestFetchPrices:
         def ticker_factory(symbol):
             return histories[symbol][1]
 
-        mocker.patch("fetcher.yfinance.Ticker", side_effect=ticker_factory)
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", side_effect=ticker_factory)
 
         results = fetch_prices(["AAPL", "MSFT"])
 
@@ -124,7 +124,7 @@ class TestFetchPrices:
         def ticker_factory(symbol):
             return good_mock if symbol == "AAPL" else bad_mock
 
-        mocker.patch("fetcher.yfinance.Ticker", side_effect=ticker_factory)
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", side_effect=ticker_factory)
 
         results = fetch_prices(["AAPL", "INVALID"])
 
@@ -135,7 +135,7 @@ class TestFetchPrices:
         """All tickers fail — returns empty list, no crash."""
         bad_mock = MagicMock()
         bad_mock.history.return_value = pd.DataFrame()
-        mocker.patch("fetcher.yfinance.Ticker", return_value=bad_mock)
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=bad_mock)
 
         results = fetch_prices(["INVALID1", "INVALID2"])
 

@@ -1,6 +1,6 @@
 """Tests for the PeakGuard custom error hierarchy."""
 
-from errors import FetchError, PeakGuardError
+from peakguard.errors import FetchError, PeakGuardError
 
 
 class TestPeakGuardError:

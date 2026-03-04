@@ -11,7 +11,7 @@ from datetime import date
 
 import yfinance
 
-from errors import FetchError
+from peakguard.errors import FetchError
 
 __all__ = ["PriceResult", "fetch_price", "fetch_prices"]
 
