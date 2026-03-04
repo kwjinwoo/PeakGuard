@@ -13,6 +13,8 @@ import yfinance
 
 from errors import FetchError
 
+__all__ = ["PriceResult", "fetch_price", "fetch_prices"]
+
 logger = logging.getLogger(__name__)
 
 

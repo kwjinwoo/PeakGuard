@@ -86,16 +86,6 @@ class TestFetchPrice:
 class TestFetchPrices:
     """Tests for the fetch_prices function."""
 
-    def _mock_successful_ticker(self, mocker, ticker: str, price: float) -> None:
-        """Helper to set up a successful yfinance mock for a single ticker."""
-        mock_history = pd.DataFrame(
-            {"Close": [price]},
-            index=pd.DatetimeIndex([pd.Timestamp("2026-03-05")]),
-        )
-        mock_obj = MagicMock()
-        mock_obj.history.return_value = mock_history
-        return mock_obj
-
     def test_returns_list_of_price_results(self, mocker) -> None:
         """Happy path: all tickers succeed."""
         histories = {

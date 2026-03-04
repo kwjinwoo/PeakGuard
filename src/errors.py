@@ -5,6 +5,8 @@ allowing callers to catch broad or narrow exception types
 as needed.
 """
 
+__all__ = ["PeakGuardError", "FetchError"]
+
 
 class PeakGuardError(Exception):
     """Base exception for all PeakGuard errors."""
