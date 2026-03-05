@@ -2,6 +2,7 @@
 
 from peakguard.errors import (
     FetchError,
+    GistError,
     NotificationError,
     PeakGuardError,
     StorageError,
@@ -89,6 +90,29 @@ class TestStorageError:
         with_caught = False
         try:
             raise StorageError(path="/tmp/test.json", message="disk full")
+        except PeakGuardError:
+            with_caught = True
+        assert with_caught
+
+
+class TestGistError:
+    """Tests for the GistError exception."""
+
+    def test_inherits_from_peakguard_error(self) -> None:
+        assert issubclass(GistError, PeakGuardError)
+
+    def test_stores_message(self) -> None:
+        error = GistError(message="API rate limit exceeded")
+        assert error.message == "API rate limit exceeded"
+
+    def test_str_returns_message(self) -> None:
+        error = GistError(message="404 Not Found")
+        assert str(error) == "404 Not Found"
+
+    def test_can_be_caught_as_peakguard_error(self) -> None:
+        with_caught = False
+        try:
+            raise GistError(message="unauthorized")
         except PeakGuardError:
             with_caught = True
         assert with_caught

@@ -5,7 +5,13 @@ allowing callers to catch broad or narrow exception types
 as needed.
 """
 
-__all__ = ["PeakGuardError", "FetchError", "NotificationError", "StorageError"]
+__all__ = [
+    "PeakGuardError",
+    "FetchError",
+    "NotificationError",
+    "StorageError",
+    "GistError",
+]
 
 
 class PeakGuardError(Exception):
@@ -50,3 +56,15 @@ class StorageError(PeakGuardError):
         self.path = path
         self.message = message
         super().__init__(f"[{path}] {message}")
+
+
+class GistError(PeakGuardError):
+    """Raised when a GitHub Gist API operation fails.
+
+    Attributes:
+        message: A human-readable description of the failure.
+    """
+
+    def __init__(self, *, message: str) -> None:
+        self.message = message
+        super().__init__(message)
