@@ -1,10 +1,11 @@
 """Tests for the storage module — PeakRecord dataclass."""
 
+import json
 from datetime import date
 
 import pytest
 
-from peakguard.storage import PeakRecord
+from peakguard.storage import PeakRecord, deserialize_peaks, serialize_peaks
 
 
 class TestPeakRecord:
@@ -46,3 +47,92 @@ class TestPeakRecord:
         """Whitespace-only ticker is a programmer error → ValueError."""
         with pytest.raises(ValueError, match="ticker"):
             PeakRecord(ticker="   ", peak_price=250.50, peak_date=date(2026, 1, 15))
+
+
+class TestSerializePeaks:
+    """Tests for the serialize_peaks function."""
+
+    def test_empty_dict_serializes_to_empty_json(self) -> None:
+        """Empty records produce an empty JSON object."""
+        result = serialize_peaks({})
+        assert json.loads(result) == {}
+
+    def test_single_record_serializes_correctly(self) -> None:
+        """Single PeakRecord is serialized with ticker as key."""
+        records = {
+            "AAPL": PeakRecord(
+                ticker="AAPL", peak_price=250.50, peak_date=date(2026, 1, 15)
+            ),
+        }
+        result = serialize_peaks(records)
+        parsed = json.loads(result)
+        assert parsed == {
+            "AAPL": {"peak_price": 250.50, "peak_date": "2026-01-15"},
+        }
+
+    def test_multiple_records_serialized_with_sorted_keys(self) -> None:
+        """Multiple records are serialized with keys sorted alphabetically."""
+        records = {
+            "MSFT": PeakRecord(
+                ticker="MSFT", peak_price=480.00, peak_date=date(2026, 2, 20)
+            ),
+            "AAPL": PeakRecord(
+                ticker="AAPL", peak_price=250.50, peak_date=date(2026, 1, 15)
+            ),
+        }
+        result = serialize_peaks(records)
+        keys = list(json.loads(result).keys())
+        assert keys == ["AAPL", "MSFT"]
+
+    def test_output_is_human_readable(self) -> None:
+        """JSON output uses indentation for readability."""
+        records = {
+            "AAPL": PeakRecord(
+                ticker="AAPL", peak_price=250.50, peak_date=date(2026, 1, 15)
+            ),
+        }
+        result = serialize_peaks(records)
+        assert "\n" in result
+        assert "  " in result
+
+
+class TestDeserializePeaks:
+    """Tests for the deserialize_peaks function."""
+
+    def test_empty_json_deserializes_to_empty_dict(self) -> None:
+        """Empty JSON object produces empty records dict."""
+        result = deserialize_peaks("{}")
+        assert result == {}
+
+    def test_single_record_deserializes_correctly(self) -> None:
+        """Valid JSON is deserialized into PeakRecord objects."""
+        data = json.dumps({"AAPL": {"peak_price": 250.50, "peak_date": "2026-01-15"}})
+        result = deserialize_peaks(data)
+        assert len(result) == 1
+        assert result["AAPL"].ticker == "AAPL"
+        assert result["AAPL"].peak_price == 250.50
+        assert result["AAPL"].peak_date == date(2026, 1, 15)
+
+    def test_roundtrip_preserves_data(self) -> None:
+        """Serialize then deserialize returns equivalent records."""
+        original = {
+            "AAPL": PeakRecord(
+                ticker="AAPL", peak_price=250.50, peak_date=date(2026, 1, 15)
+            ),
+            "MSFT": PeakRecord(
+                ticker="MSFT", peak_price=480.00, peak_date=date(2026, 2, 20)
+            ),
+        }
+        roundtripped = deserialize_peaks(serialize_peaks(original))
+        assert roundtripped == original
+
+    def test_raises_value_error_on_invalid_json(self) -> None:
+        """Invalid JSON string raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid JSON"):
+            deserialize_peaks("not valid json")
+
+    def test_raises_value_error_on_missing_field(self) -> None:
+        """Missing required field in JSON raises ValueError."""
+        data = json.dumps({"AAPL": {"peak_price": 250.50}})
+        with pytest.raises(ValueError, match="peak_date"):
+            deserialize_peaks(data)
