@@ -1,6 +1,11 @@
 """Tests for the PeakGuard custom error hierarchy."""
 
-from peakguard.errors import FetchError, NotificationError, PeakGuardError
+from peakguard.errors import (
+    FetchError,
+    NotificationError,
+    PeakGuardError,
+    StorageError,
+)
 
 
 class TestPeakGuardError:
@@ -58,6 +63,32 @@ class TestNotificationError:
         with_caught = False
         try:
             raise NotificationError(message="server error")
+        except PeakGuardError:
+            with_caught = True
+        assert with_caught
+
+
+class TestStorageError:
+    """Tests for the StorageError exception."""
+
+    def test_inherits_from_peakguard_error(self) -> None:
+        assert issubclass(StorageError, PeakGuardError)
+
+    def test_stores_path_and_message(self) -> None:
+        error = StorageError(path="/tmp/peak_prices.json", message="file not found")
+        assert error.path == "/tmp/peak_prices.json"
+        assert error.message == "file not found"
+
+    def test_str_contains_path_and_message(self) -> None:
+        error = StorageError(path="/data/prices.json", message="permission denied")
+        result = str(error)
+        assert "/data/prices.json" in result
+        assert "permission denied" in result
+
+    def test_can_be_caught_as_peakguard_error(self) -> None:
+        with_caught = False
+        try:
+            raise StorageError(path="/tmp/test.json", message="disk full")
         except PeakGuardError:
             with_caught = True
         assert with_caught

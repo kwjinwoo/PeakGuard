@@ -5,7 +5,7 @@ allowing callers to catch broad or narrow exception types
 as needed.
 """
 
-__all__ = ["PeakGuardError", "FetchError", "NotificationError"]
+__all__ = ["PeakGuardError", "FetchError", "NotificationError", "StorageError"]
 
 
 class PeakGuardError(Exception):
@@ -36,3 +36,17 @@ class NotificationError(PeakGuardError):
     def __init__(self, *, message: str) -> None:
         self.message = message
         super().__init__(message)
+
+
+class StorageError(PeakGuardError):
+    """Raised when a storage I/O operation fails.
+
+    Attributes:
+        path: The file path involved in the failed operation.
+        message: A human-readable description of the failure.
+    """
+
+    def __init__(self, *, path: str, message: str) -> None:
+        self.path = path
+        self.message = message
+        super().__init__(f"[{path}] {message}")
