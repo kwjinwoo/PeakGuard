@@ -5,7 +5,7 @@ allowing callers to catch broad or narrow exception types
 as needed.
 """
 
-__all__ = ["PeakGuardError", "FetchError"]
+__all__ = ["PeakGuardError", "FetchError", "NotificationError"]
 
 
 class PeakGuardError(Exception):
@@ -24,3 +24,15 @@ class FetchError(PeakGuardError):
         self.ticker = ticker
         self.message = message
         super().__init__(f"[{ticker}] {message}")
+
+
+class NotificationError(PeakGuardError):
+    """Raised when sending a notification via an external channel fails.
+
+    Attributes:
+        message: A human-readable description of the failure.
+    """
+
+    def __init__(self, *, message: str) -> None:
+        self.message = message
+        super().__init__(message)

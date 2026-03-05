@@ -1,6 +1,6 @@
 """Tests for the PeakGuard custom error hierarchy."""
 
-from peakguard.errors import FetchError, PeakGuardError
+from peakguard.errors import FetchError, NotificationError, PeakGuardError
 
 
 class TestPeakGuardError:
@@ -35,6 +35,29 @@ class TestFetchError:
         with_caught = False
         try:
             raise FetchError(ticker="GOOG", message="connection error")
+        except PeakGuardError:
+            with_caught = True
+        assert with_caught
+
+
+class TestNotificationError:
+    """Tests for the NotificationError exception."""
+
+    def test_inherits_from_peakguard_error(self) -> None:
+        assert issubclass(NotificationError, PeakGuardError)
+
+    def test_stores_message(self) -> None:
+        error = NotificationError(message="Telegram API timeout")
+        assert error.message == "Telegram API timeout"
+
+    def test_str_returns_message(self) -> None:
+        error = NotificationError(message="rate limited")
+        assert str(error) == "rate limited"
+
+    def test_can_be_caught_as_peakguard_error(self) -> None:
+        with_caught = False
+        try:
+            raise NotificationError(message="server error")
         except PeakGuardError:
             with_caught = True
         assert with_caught
