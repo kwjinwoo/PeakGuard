@@ -7,7 +7,7 @@ and updating all-time high (ATH) records.
 No I/O, no network calls, no file system access.
 """
 
-__all__ = ["calculate_drawdown"]
+__all__ = ["calculate_drawdown", "check_threshold"]
 
 
 def calculate_drawdown(current_price: float, peak_price: float) -> float:
@@ -38,3 +38,28 @@ def calculate_drawdown(current_price: float, peak_price: float) -> float:
         )
 
     return round((peak_price - current_price) / peak_price * 100, 2)
+
+
+def check_threshold(drawdown_pct: float, threshold: float) -> bool:
+    """Determine whether a drawdown has breached the alert threshold.
+
+    The check is inclusive: a drawdown exactly equal to the threshold
+    is considered a breach.
+
+    Args:
+        drawdown_pct: The current drawdown percentage (0–100).
+        threshold: The alert threshold percentage (0 < threshold <= 100).
+
+    Returns:
+        True if the drawdown meets or exceeds the threshold.
+
+    Raises:
+        ValueError: If drawdown_pct is negative, or threshold is
+            not in the range (0, 100].
+    """
+    if drawdown_pct < 0:
+        raise ValueError(f"drawdown_pct must be non-negative, got {drawdown_pct}")
+    if threshold <= 0 or threshold > 100:
+        raise ValueError(f"threshold must be in the range (0, 100], got {threshold}")
+
+    return drawdown_pct >= threshold

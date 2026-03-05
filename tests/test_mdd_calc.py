@@ -2,7 +2,7 @@
 
 import pytest
 
-from peakguard.mdd_calc import calculate_drawdown
+from peakguard.mdd_calc import calculate_drawdown, check_threshold
 
 
 class TestCalculateDrawdown:
@@ -54,3 +54,43 @@ class TestCalculateDrawdown:
         """current_price > peak_price is a programmer error → ValueError."""
         with pytest.raises(ValueError, match="cannot exceed"):
             calculate_drawdown(current_price=110.0, peak_price=100.0)
+
+
+class TestCheckThreshold:
+    """Tests for the check_threshold function."""
+
+    def test_drawdown_exceeds_threshold(self) -> None:
+        """Drawdown above threshold triggers alert."""
+        assert check_threshold(drawdown_pct=15.0, threshold=10.0) is True
+
+    def test_drawdown_below_threshold(self) -> None:
+        """Drawdown below threshold does not trigger alert."""
+        assert check_threshold(drawdown_pct=5.0, threshold=10.0) is False
+
+    def test_drawdown_exactly_at_threshold(self) -> None:
+        """Drawdown exactly at threshold triggers alert (boundary inclusive)."""
+        assert check_threshold(drawdown_pct=10.0, threshold=10.0) is True
+
+    def test_zero_drawdown(self) -> None:
+        """Zero drawdown does not trigger alert."""
+        assert check_threshold(drawdown_pct=0.0, threshold=5.0) is False
+
+    def test_rejects_negative_drawdown(self) -> None:
+        """Negative drawdown_pct is invalid → ValueError."""
+        with pytest.raises(ValueError, match="drawdown_pct"):
+            check_threshold(drawdown_pct=-1.0, threshold=10.0)
+
+    def test_rejects_zero_threshold(self) -> None:
+        """Zero threshold is invalid → ValueError."""
+        with pytest.raises(ValueError, match="threshold"):
+            check_threshold(drawdown_pct=5.0, threshold=0.0)
+
+    def test_rejects_negative_threshold(self) -> None:
+        """Negative threshold is invalid → ValueError."""
+        with pytest.raises(ValueError, match="threshold"):
+            check_threshold(drawdown_pct=5.0, threshold=-5.0)
+
+    def test_rejects_threshold_above_100(self) -> None:
+        """Threshold > 100 is invalid → ValueError."""
+        with pytest.raises(ValueError, match="threshold"):
+            check_threshold(drawdown_pct=5.0, threshold=101.0)
