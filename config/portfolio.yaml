@@ -1,0 +1,20 @@
+# PeakGuard Portfolio Configuration
+# Each entry maps a ticker symbol to its MDD alert threshold (%).
+
+tickers:
+  # Individual tech stocks
+  AMZN:
+    name: "Amazon"
+    threshold: 15.0
+  MSFT:
+    name: "Microsoft"
+    threshold: 15.0
+  META:
+    name: "Meta"
+    threshold: 15.0
+  NVDA:
+    name: "Nvidia"
+    threshold: 15.0
+  GOOGL:
+    name: "Google"
+    threshold: 15.0
