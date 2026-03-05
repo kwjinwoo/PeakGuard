@@ -1,0 +1,241 @@
+"""Tests for the notifier module — AlertData, send_alert, and send_alerts."""
+
+import os
+from unittest.mock import MagicMock
+
+import pytest
+import requests
+
+from peakguard.errors import NotificationError
+from peakguard.notifier import AlertData, send_alert
+
+
+class TestAlertData:
+    """Tests for the AlertData dataclass."""
+
+    def test_creation_with_valid_data(self) -> None:
+        """Stores all fields correctly."""
+        alert = AlertData(
+            ticker="AAPL",
+            current_price=150.0,
+            peak_price=200.0,
+            drawdown_pct=25.0,
+        )
+        assert alert.ticker == "AAPL"
+        assert alert.current_price == 150.0
+        assert alert.peak_price == 200.0
+        assert alert.drawdown_pct == 25.0
+
+    def test_is_frozen(self) -> None:
+        """AlertData instances are immutable."""
+        alert = AlertData(
+            ticker="AAPL",
+            current_price=150.0,
+            peak_price=200.0,
+            drawdown_pct=25.0,
+        )
+        with pytest.raises(AttributeError):
+            alert.ticker = "MSFT"  # type: ignore[misc]
+
+    def test_rejects_empty_ticker(self) -> None:
+        """Empty ticker is a programmer error → ValueError."""
+        with pytest.raises(ValueError, match="ticker"):
+            AlertData(
+                ticker="",
+                current_price=150.0,
+                peak_price=200.0,
+                drawdown_pct=25.0,
+            )
+
+    def test_rejects_whitespace_ticker(self) -> None:
+        """Whitespace-only ticker is a programmer error → ValueError."""
+        with pytest.raises(ValueError, match="ticker"):
+            AlertData(
+                ticker="   ",
+                current_price=150.0,
+                peak_price=200.0,
+                drawdown_pct=25.0,
+            )
+
+    def test_rejects_negative_drawdown(self) -> None:
+        """Negative drawdown_pct is invalid → ValueError."""
+        with pytest.raises(ValueError, match="drawdown_pct"):
+            AlertData(
+                ticker="AAPL",
+                current_price=150.0,
+                peak_price=200.0,
+                drawdown_pct=-5.0,
+            )
+
+    def test_rejects_drawdown_over_100(self) -> None:
+        """drawdown_pct over 100 is invalid → ValueError."""
+        with pytest.raises(ValueError, match="drawdown_pct"):
+            AlertData(
+                ticker="AAPL",
+                current_price=150.0,
+                peak_price=200.0,
+                drawdown_pct=105.0,
+            )
+
+    def test_accepts_zero_drawdown(self) -> None:
+        """drawdown_pct of 0 is valid (price at ATH)."""
+        alert = AlertData(
+            ticker="AAPL",
+            current_price=200.0,
+            peak_price=200.0,
+            drawdown_pct=0.0,
+        )
+        assert alert.drawdown_pct == 0.0
+
+    def test_accepts_100_drawdown(self) -> None:
+        """drawdown_pct of 100 is valid (total loss)."""
+        alert = AlertData(
+            ticker="AAPL",
+            current_price=0.01,
+            peak_price=200.0,
+            drawdown_pct=100.0,
+        )
+        assert alert.drawdown_pct == 100.0
+
+
+class TestSendAlert:
+    """Tests for the send_alert function."""
+
+    @pytest.fixture(autouse=True)
+    def _set_env(self, mocker) -> None:
+        """Provide valid Telegram env vars for every test by default."""
+        mocker.patch.dict(
+            os.environ,
+            {
+                "TELEGRAM_BOT_TOKEN": "fake-token-123",
+                "TELEGRAM_CHAT_ID": "99999",
+            },
+        )
+
+    def _make_alert(self) -> AlertData:
+        """Helper to create a valid AlertData for testing."""
+        return AlertData(
+            ticker="AAPL",
+            current_price=150.0,
+            peak_price=200.0,
+            drawdown_pct=25.0,
+        )
+
+    def test_sends_post_request_on_success(self, mocker) -> None:
+        """Happy path: sends Telegram message and returns without error."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        send_alert(self._make_alert())
+
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        assert "https://api.telegram.org/bot" in call_args[0][0]
+        assert "sendMessage" in call_args[0][0]
+
+    def test_message_contains_alert_details(self, mocker) -> None:
+        """Posted message text includes ticker, prices, and drawdown."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        send_alert(self._make_alert())
+
+        call_kwargs = mock_post.call_args
+        payload = call_kwargs[1]["json"] if "json" in call_kwargs[1] else call_kwargs[1]
+        text = payload["text"]
+        assert "AAPL" in text
+        assert "150.0" in text or "150" in text
+        assert "200.0" in text or "200" in text
+        assert "25.0" in text or "25" in text
+
+    def test_uses_correct_token_and_chat_id(self, mocker) -> None:
+        """URL contains the bot token and payload contains the chat_id."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        send_alert(self._make_alert())
+
+        url = mock_post.call_args[0][0]
+        assert "fake-token-123" in url
+        payload = mock_post.call_args[1]["json"]
+        assert payload["chat_id"] == "99999"
+
+    def test_raises_value_error_when_token_missing(self, mocker) -> None:
+        """Missing TELEGRAM_BOT_TOKEN is a programmer error → ValueError."""
+        mocker.patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": ""}, clear=False)
+
+        with pytest.raises(ValueError, match="TELEGRAM_BOT_TOKEN"):
+            send_alert(self._make_alert())
+
+    def test_raises_value_error_when_chat_id_missing(self, mocker) -> None:
+        """Missing TELEGRAM_CHAT_ID is a programmer error → ValueError."""
+        mocker.patch.dict(os.environ, {"TELEGRAM_CHAT_ID": ""}, clear=False)
+
+        with pytest.raises(ValueError, match="TELEGRAM_CHAT_ID"):
+            send_alert(self._make_alert())
+
+    def test_raises_value_error_when_token_not_set(self, mocker) -> None:
+        """TELEGRAM_BOT_TOKEN not in environment → ValueError."""
+        mocker.patch.dict(
+            os.environ, {"TELEGRAM_CHAT_ID": "99999"}, clear=True
+        )
+
+        with pytest.raises(ValueError, match="TELEGRAM_BOT_TOKEN"):
+            send_alert(self._make_alert())
+
+    def test_raises_notification_error_on_http_error(self, mocker) -> None:
+        """Non-2xx response from Telegram API → NotificationError."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            "400 Bad Request"
+        )
+        mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        with pytest.raises(NotificationError, match="400"):
+            send_alert(self._make_alert())
+
+    def test_wraps_network_error_in_notification_error(self, mocker) -> None:
+        """Network failure is wrapped in NotificationError."""
+        mocker.patch(
+            "peakguard.notifier.requests.post",
+            side_effect=requests.exceptions.ConnectionError("network down"),
+        )
+
+        with pytest.raises(NotificationError, match="network down"):
+            send_alert(self._make_alert())
+
+    def test_wraps_timeout_in_notification_error(self, mocker) -> None:
+        """Timeout is wrapped in NotificationError."""
+        mocker.patch(
+            "peakguard.notifier.requests.post",
+            side_effect=requests.exceptions.Timeout("read timed out"),
+        )
+
+        with pytest.raises(NotificationError, match="timed out"):
+            send_alert(self._make_alert())
+
+    def test_sets_request_timeout(self, mocker) -> None:
+        """requests.post is called with a timeout parameter."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        send_alert(self._make_alert())
+
+        call_kwargs = mock_post.call_args[1]
+        assert "timeout" in call_kwargs
+        assert call_kwargs["timeout"] > 0
