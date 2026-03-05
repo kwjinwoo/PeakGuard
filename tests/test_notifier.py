@@ -7,7 +7,7 @@ import pytest
 import requests
 
 from peakguard.errors import NotificationError
-from peakguard.notifier import AlertData, send_alert
+from peakguard.notifier import AlertData, send_alert, send_alerts
 
 
 class TestAlertData:
@@ -186,9 +186,7 @@ class TestSendAlert:
 
     def test_raises_value_error_when_token_not_set(self, mocker) -> None:
         """TELEGRAM_BOT_TOKEN not in environment → ValueError."""
-        mocker.patch.dict(
-            os.environ, {"TELEGRAM_CHAT_ID": "99999"}, clear=True
-        )
+        mocker.patch.dict(os.environ, {"TELEGRAM_CHAT_ID": "99999"}, clear=True)
 
         with pytest.raises(ValueError, match="TELEGRAM_BOT_TOKEN"):
             send_alert(self._make_alert())
@@ -199,9 +197,7 @@ class TestSendAlert:
         mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
             "400 Bad Request"
         )
-        mocker.patch(
-            "peakguard.notifier.requests.post", return_value=mock_response
-        )
+        mocker.patch("peakguard.notifier.requests.post", return_value=mock_response)
 
         with pytest.raises(NotificationError, match="400"):
             send_alert(self._make_alert())
@@ -239,3 +235,87 @@ class TestSendAlert:
         call_kwargs = mock_post.call_args[1]
         assert "timeout" in call_kwargs
         assert call_kwargs["timeout"] > 0
+
+
+class TestSendAlerts:
+    """Tests for the send_alerts bulk function."""
+
+    @pytest.fixture(autouse=True)
+    def _set_env(self, mocker) -> None:
+        """Provide valid Telegram env vars for every test by default."""
+        mocker.patch.dict(
+            os.environ,
+            {
+                "TELEGRAM_BOT_TOKEN": "fake-token-123",
+                "TELEGRAM_CHAT_ID": "99999",
+            },
+        )
+
+    def _make_alert(self, ticker: str = "AAPL") -> AlertData:
+        """Helper to create a valid AlertData for testing."""
+        return AlertData(
+            ticker=ticker,
+            current_price=150.0,
+            peak_price=200.0,
+            drawdown_pct=25.0,
+        )
+
+    def test_sends_all_alerts_on_success(self, mocker) -> None:
+        """Happy path: all alerts are sent successfully."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        alerts = [self._make_alert("AAPL"), self._make_alert("MSFT")]
+        results = send_alerts(alerts)
+
+        assert len(results) == 2
+        assert results[0].ticker == "AAPL"
+        assert results[1].ticker == "MSFT"
+        assert mock_post.call_count == 2
+
+    def test_skips_failed_alerts_and_returns_rest(self, mocker) -> None:
+        """One alert fails but others succeed — no crash."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+
+        call_count = 0
+
+        def post_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise requests.exceptions.ConnectionError("network down")
+            return mock_response
+
+        mocker.patch("peakguard.notifier.requests.post", side_effect=post_side_effect)
+
+        alerts = [
+            self._make_alert("AAPL"),
+            self._make_alert("MSFT"),
+            self._make_alert("GOOG"),
+        ]
+        results = send_alerts(alerts)
+
+        assert len(results) == 2
+        assert results[0].ticker == "AAPL"
+        assert results[1].ticker == "GOOG"
+
+    def test_returns_empty_list_when_all_fail(self, mocker) -> None:
+        """All alerts fail — returns empty list, no crash."""
+        mocker.patch(
+            "peakguard.notifier.requests.post",
+            side_effect=requests.exceptions.ConnectionError("network down"),
+        )
+
+        alerts = [self._make_alert("AAPL"), self._make_alert("MSFT")]
+        results = send_alerts(alerts)
+
+        assert results == []
+
+    def test_returns_empty_list_for_empty_input(self) -> None:
+        """Empty alert list returns empty result list."""
+        results = send_alerts([])
+        assert results == []

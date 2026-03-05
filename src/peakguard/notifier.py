@@ -109,3 +109,27 @@ def send_alert(alert: AlertData) -> None:
         response.raise_for_status()
     except requests.exceptions.RequestException as exc:
         raise NotificationError(message=str(exc)) from exc
+
+
+def send_alerts(alerts: list[AlertData]) -> list[AlertData]:
+    """Send multiple drawdown alerts via Telegram.
+
+    Iterates through each alert and calls send_alert individually.
+    If a single alert fails, the error is logged and that alert
+    is skipped — the remaining alerts are still processed.
+
+    Args:
+        alerts: A list of AlertData objects to send.
+
+    Returns:
+        A list of AlertData for each successfully sent alert.
+        May be shorter than the input list if some alerts failed.
+    """
+    results: list[AlertData] = []
+    for alert in alerts:
+        try:
+            send_alert(alert)
+            results.append(alert)
+        except NotificationError as exc:
+            logger.warning("Failed to send alert for %s: %s", alert.ticker, exc)
+    return results
