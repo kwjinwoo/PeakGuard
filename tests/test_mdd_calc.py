@@ -1,8 +1,11 @@
 """Tests for the mdd_calc module — pure domain logic for MDD tracking."""
 
+from datetime import date
+
 import pytest
 
-from peakguard.mdd_calc import calculate_drawdown, check_threshold
+from peakguard.mdd_calc import calculate_drawdown, check_threshold, update_peak
+from peakguard.storage import PeakRecord
 
 
 class TestCalculateDrawdown:
@@ -94,3 +97,65 @@ class TestCheckThreshold:
         """Threshold > 100 is invalid → ValueError."""
         with pytest.raises(ValueError, match="threshold"):
             check_threshold(drawdown_pct=5.0, threshold=101.0)
+
+
+class TestUpdatePeak:
+    """Tests for the update_peak function."""
+
+    @staticmethod
+    def _make_record(
+        ticker: str = "AAPL",
+        peak_price: float = 100.0,
+        peak_date: date = date(2026, 1, 15),
+    ) -> PeakRecord:
+        return PeakRecord(ticker=ticker, peak_price=peak_price, peak_date=peak_date)
+
+    def test_new_ath_returns_updated_record(self) -> None:
+        """Price above ATH produces a new PeakRecord with updated price and date."""
+        record = self._make_record(peak_price=100.0)
+        today = date(2026, 3, 6)
+
+        result = update_peak(current_price=110.0, record=record, today=today)
+
+        assert result.peak_price == 110.0
+        assert result.peak_date == today
+        assert result.ticker == "AAPL"
+
+    def test_same_price_keeps_original_record(self) -> None:
+        """Price equal to ATH returns the original record unchanged."""
+        record = self._make_record(peak_price=100.0)
+        today = date(2026, 3, 6)
+
+        result = update_peak(current_price=100.0, record=record, today=today)
+
+        assert result is record
+
+    def test_lower_price_keeps_original_record(self) -> None:
+        """Price below ATH returns the original record unchanged."""
+        record = self._make_record(peak_price=100.0)
+        today = date(2026, 3, 6)
+
+        result = update_peak(current_price=90.0, record=record, today=today)
+
+        assert result is record
+
+    def test_preserves_ticker(self) -> None:
+        """Updated record preserves the original ticker symbol."""
+        record = self._make_record(ticker="MSFT", peak_price=400.0)
+        today = date(2026, 3, 6)
+
+        result = update_peak(current_price=450.0, record=record, today=today)
+
+        assert result.ticker == "MSFT"
+
+    def test_rejects_zero_current_price(self) -> None:
+        """Zero current_price is invalid → ValueError."""
+        record = self._make_record()
+        with pytest.raises(ValueError, match="current_price"):
+            update_peak(current_price=0.0, record=record, today=date(2026, 3, 6))
+
+    def test_rejects_negative_current_price(self) -> None:
+        """Negative current_price is invalid → ValueError."""
+        record = self._make_record()
+        with pytest.raises(ValueError, match="current_price"):
+            update_peak(current_price=-5.0, record=record, today=date(2026, 3, 6))
