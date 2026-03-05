@@ -1,11 +1,19 @@
-"""Tests for the storage module — PeakRecord dataclass."""
+"""Tests for the storage module — PeakRecord, serialization, and file I/O."""
 
 import json
 from datetime import date
+from pathlib import Path
 
 import pytest
 
-from peakguard.storage import PeakRecord, deserialize_peaks, serialize_peaks
+from peakguard.errors import StorageError
+from peakguard.storage import (
+    PeakRecord,
+    deserialize_peaks,
+    load_peaks,
+    save_peaks,
+    serialize_peaks,
+)
 
 
 class TestPeakRecord:
@@ -136,3 +144,102 @@ class TestDeserializePeaks:
         data = json.dumps({"AAPL": {"peak_price": 250.50}})
         with pytest.raises(ValueError, match="peak_date"):
             deserialize_peaks(data)
+
+
+class TestSavePeaks:
+    """Tests for the save_peaks function."""
+
+    def test_writes_json_file(self, tmp_path: Path) -> None:
+        """Happy path: saves records to a JSON file."""
+        filepath = tmp_path / "peak_prices.json"
+        records = {
+            "AAPL": PeakRecord(
+                ticker="AAPL", peak_price=250.50, peak_date=date(2026, 1, 15)
+            ),
+        }
+        save_peaks(records, filepath)
+
+        assert filepath.exists()
+        parsed = json.loads(filepath.read_text())
+        assert parsed["AAPL"]["peak_price"] == 250.50
+        assert parsed["AAPL"]["peak_date"] == "2026-01-15"
+
+    def test_writes_empty_json_for_empty_dict(self, tmp_path: Path) -> None:
+        """Empty records produce an empty JSON object file."""
+        filepath = tmp_path / "peak_prices.json"
+        save_peaks({}, filepath)
+
+        assert filepath.exists()
+        assert json.loads(filepath.read_text()) == {}
+
+    def test_overwrites_existing_file(self, tmp_path: Path) -> None:
+        """Saves overwrite existing file content."""
+        filepath = tmp_path / "peak_prices.json"
+        filepath.write_text('{"OLD": {}}')
+
+        records = {
+            "AAPL": PeakRecord(
+                ticker="AAPL", peak_price=250.50, peak_date=date(2026, 1, 15)
+            ),
+        }
+        save_peaks(records, filepath)
+
+        parsed = json.loads(filepath.read_text())
+        assert "OLD" not in parsed
+        assert "AAPL" in parsed
+
+    def test_raises_storage_error_on_write_failure(self, tmp_path: Path) -> None:
+        """I/O failure during write raises StorageError."""
+        filepath = tmp_path / "nonexistent_dir" / "sub" / "peak_prices.json"
+        records = {
+            "AAPL": PeakRecord(
+                ticker="AAPL", peak_price=250.50, peak_date=date(2026, 1, 15)
+            ),
+        }
+        with pytest.raises(StorageError, match="peak_prices.json"):
+            save_peaks(records, filepath)
+
+
+class TestLoadPeaks:
+    """Tests for the load_peaks function."""
+
+    def test_loads_records_from_file(self, tmp_path: Path) -> None:
+        """Happy path: reads and deserializes a JSON file."""
+        filepath = tmp_path / "peak_prices.json"
+        data = json.dumps({"AAPL": {"peak_price": 250.50, "peak_date": "2026-01-15"}})
+        filepath.write_text(data)
+
+        result = load_peaks(filepath)
+
+        assert len(result) == 1
+        assert result["AAPL"].ticker == "AAPL"
+        assert result["AAPL"].peak_price == 250.50
+        assert result["AAPL"].peak_date == date(2026, 1, 15)
+
+    def test_returns_empty_dict_when_file_missing(self, tmp_path: Path) -> None:
+        """Missing file returns empty dict (first run scenario)."""
+        filepath = tmp_path / "nonexistent.json"
+        result = load_peaks(filepath)
+        assert result == {}
+
+    def test_roundtrip_save_then_load(self, tmp_path: Path) -> None:
+        """Save then load returns equivalent records."""
+        filepath = tmp_path / "peak_prices.json"
+        original = {
+            "AAPL": PeakRecord(
+                ticker="AAPL", peak_price=250.50, peak_date=date(2026, 1, 15)
+            ),
+            "MSFT": PeakRecord(
+                ticker="MSFT", peak_price=480.00, peak_date=date(2026, 2, 20)
+            ),
+        }
+        save_peaks(original, filepath)
+        loaded = load_peaks(filepath)
+        assert loaded == original
+
+    def test_raises_storage_error_on_read_failure(self, tmp_path: Path) -> None:
+        """Corrupted file content raises StorageError."""
+        filepath = tmp_path / "bad.json"
+        filepath.write_text("not valid json")
+        with pytest.raises(StorageError, match="bad.json"):
+            load_peaks(filepath)

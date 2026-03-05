@@ -9,8 +9,17 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 
-__all__ = ["PeakRecord", "serialize_peaks", "deserialize_peaks"]
+from peakguard.errors import StorageError
+
+__all__ = [
+    "PeakRecord",
+    "serialize_peaks",
+    "deserialize_peaks",
+    "load_peaks",
+    "save_peaks",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -96,3 +105,47 @@ def deserialize_peaks(data: str) -> dict[str, "PeakRecord"]:
                 f"Missing required field {exc} for ticker '{ticker}'"
             ) from exc
     return records
+
+
+def save_peaks(records: dict[str, "PeakRecord"], path: Path) -> None:
+    """Save peak records to a local JSON file.
+
+    Serializes the records to a human-readable JSON string and writes
+    it to the specified file path. Overwrites any existing content.
+
+    Args:
+        records: A mapping of ticker symbols to PeakRecord objects.
+        path: The file path to write to.
+
+    Raises:
+        StorageError: If the file cannot be written.
+    """
+    try:
+        path.write_text(serialize_peaks(records), encoding="utf-8")
+    except OSError as exc:
+        raise StorageError(path=str(path), message=str(exc)) from exc
+
+
+def load_peaks(path: Path) -> dict[str, "PeakRecord"]:
+    """Load peak records from a local JSON file.
+
+    If the file does not exist, returns an empty dict (first-run scenario).
+
+    Args:
+        path: The file path to read from.
+
+    Returns:
+        A mapping of ticker symbols to PeakRecord objects.
+
+    Raises:
+        StorageError: If the file exists but cannot be read or parsed.
+    """
+    if not path.exists():
+        logger.info("Peak file not found at %s, returning empty records", path)
+        return {}
+
+    try:
+        data = path.read_text(encoding="utf-8")
+        return deserialize_peaks(data)
+    except (OSError, ValueError) as exc:
+        raise StorageError(path=str(path), message=str(exc)) from exc
