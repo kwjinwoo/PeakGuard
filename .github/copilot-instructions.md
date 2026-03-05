@@ -15,8 +15,10 @@ when generating or suggesting code.
   - Runs exclusively via GitHub Actions schedule (cron)
   - No dedicated 24/7 servers or cloud instances
 
-- **File-based persistence only**
-  - Use JSON (`peak_prices.json`) committed back to the repository
+- **Gist-based JSON persistence**
+  - Use JSON (`peak_prices.json`) stored in a GitHub Gist
+  - The `gist_client` module reads/writes via the GitHub Gist API
+  - Local file I/O (`storage` module) is available for testing and development
   - No external database (e.g., PostgreSQL, MySQL) or ORM
 
 - **Domain focus**
@@ -52,12 +54,14 @@ Keep responsibilities separated:
   - No I/O, no network calls, no file system access.
 
 - **Storage (`storage`)**
-  - JSON serialization/deserialization.
-  - Deterministic file updates for GitHub Actions to commit.
+  - JSON serialization/deserialization (`serialize_peaks`, `deserialize_peaks`).
+  - Local file I/O for testing and development (`load_peaks`, `save_peaks`).
+  - Contains `PeakRecord` dataclass for ATH data.
 
-- **External Services (`fetcher`, `notifier`)**
+- **External Services (`fetcher`, `notifier`, `gist_client`)**
   - `fetcher`: Wraps `yfinance` to get the latest close price.
   - `notifier`: Wraps Telegram Bot API for alerts.
+  - `gist_client`: Wraps GitHub Gist API for remote JSON persistence.
   - Must handle network timeouts and rate limits gracefully.
 
 Copilot **must not** mix these layers.
@@ -69,7 +73,7 @@ Copilot **must not** mix these layers.
 ### External/Network errors vs Programmer errors
 
 - **Network/API Errors**
-  - Use custom error hierarchy (`FetchError`, `NotificationError`, etc.).
+  - Use custom error hierarchy (`FetchError`, `NotificationError`, `StorageError`, `GistError`, etc.).
   - Must not crash the entire run if one ticker fails to fetch; log the error and proceed to the next.
 
 - **Programmer / invariant violations**
@@ -88,6 +92,13 @@ Assertions:
   - Be human-readable.
   - Map tickers to their respective ATH and the date it was reached.
 
+- **Production persistence** uses GitHub Gist:
+  - `gist_client.read_gist()` / `gist_client.write_gist()` for remote I/O.
+  - Requires `GITHUB_TOKEN` and `GIST_ID` environment variables.
+
+- **Local persistence** is available for testing/development:
+  - `storage.load_peaks()` / `storage.save_peaks()` for file-based I/O.
+
 Copilot should not introduce:
 - SQLite or external DB drivers.
 - Asynchronous file I/O (synchronous is fine for this scale).
@@ -99,6 +110,9 @@ Copilot should not introduce:
 - Entry point: `python src/main.py`
 - Configuration: `config/portfolio.yaml` dictates tickers and alert thresholds.
 - Secrets: Handled entirely via `os.environ` (injected by GitHub Actions Secrets).
+  - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` — Telegram alerts
+  - `GITHUB_TOKEN` — GitHub Gist API access
+  - `GIST_ID` — Target Gist ID for `peak_prices.json`
 
 ---
 

@@ -79,9 +79,7 @@ def read_gist(*, gist_id: str, filename: str) -> str:
 
     files = response.json().get("files", {})
     if filename not in files:
-        raise GistError(
-            message=f"File '{filename}' not found in gist '{gist_id}'"
-        )
+        raise GistError(message=f"File '{filename}' not found in gist '{gist_id}'")
 
     return files[filename]["content"]
 

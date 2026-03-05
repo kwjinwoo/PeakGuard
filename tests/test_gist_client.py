@@ -167,9 +167,7 @@ class TestWriteGist:
         mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
             "422 Unprocessable"
         )
-        mocker.patch(
-            "peakguard.gist_client.requests.patch", return_value=mock_response
-        )
+        mocker.patch("peakguard.gist_client.requests.patch", return_value=mock_response)
 
         with pytest.raises(GistError, match="422"):
             write_gist(

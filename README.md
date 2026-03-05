@@ -12,7 +12,7 @@ When a user-defined threshold is breached, it sends an alert via Telegram — al
 - **Zero-cost operation** — Runs entirely on GitHub Actions (cron schedule), no cloud instances needed
 - **ATH & MDD tracking** — Automatically tracks All-Time High and calculates Maximum Drawdown
 - **Telegram alerts** — Sends notifications when drawdown exceeds configured thresholds
-- **File-based persistence** — Stores peak prices in `peak_prices.json` committed to the repo (no database)
+- **Gist-based persistence** — Stores peak prices in `peak_prices.json` via GitHub Gist (no database, no repo commits for data)
 - **Daily post-market check** — Fetches closing prices once a day via `yfinance`
 
 ## Target Assets
@@ -28,7 +28,8 @@ When a user-defined threshold is breached, it sends an alert via Telegram — al
 src/
 ├── main.py          # Entry point
 ├── mdd_calc.py      # Pure domain logic (drawdown calculation)
-├── storage.py       # JSON persistence (peak_prices.json)
+├── storage.py       # JSON serialization/deserialization & local file I/O
+├── gist_client.py   # GitHub Gist API wrapper (remote persistence)
 ├── fetcher.py       # yfinance wrapper (current price fetching)
 └── notifier.py      # Telegram Bot API wrapper (alerts)
 ```
@@ -36,8 +37,8 @@ src/
 **Layered Design** — Strict separation of concerns:
 
 - **Domain** (`mdd_calc`) — Pure business logic, no I/O
-- **Storage** (`storage`) — JSON serialization/deserialization
-- **External Services** (`fetcher`, `notifier`) — Network calls with graceful error handling
+- **Storage** (`storage`) — JSON serialization/deserialization, local file I/O
+- **External Services** (`fetcher`, `notifier`, `gist_client`) — Network calls with graceful error handling
 
 ## Requirements
 
@@ -72,6 +73,8 @@ Set the following secrets (used by GitHub Actions):
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot API token |
 | `TELEGRAM_CHAT_ID` | Target chat ID for alerts |
+| `GITHUB_TOKEN` | GitHub personal access token (Gist read/write) |
+| `GIST_ID` | Target Gist ID for `peak_prices.json` |
 
 ### 5. Run
 
