@@ -6,10 +6,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from peakguard.config import TickerConfig
-from peakguard.errors import FetchError, GistError, NotificationError
+from peakguard.errors import FetchError, FetchFailureCause, GistError, NotificationError
 from peakguard.fetcher import PriceResult
 from peakguard.main import run
-from peakguard.notifier import ATHData, AlertData
+from peakguard.notifier import ATHData, AlertData, FetchErrorData
 
 
 @pytest.fixture()
@@ -345,3 +345,113 @@ class TestRun:
         # Peak should still be updated despite alert failure
         written_json = mock_write_gist.call_args[1]["content"]
         assert "520.0" in written_json
+
+
+class TestRunFetchErrorNotification:
+    """Tests for batch fetch-error notification in run()."""
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
+    @patch("peakguard.main.send_ath_alert")
+    @patch("peakguard.main.send_alert")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_portfolio")
+    def test_no_fetch_errors_does_not_send_alert(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_alert: MagicMock,
+        mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
+        mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
+    ) -> None:
+        """All fetches succeed → send_fetch_errors_alert called with empty list."""
+        mock_load_portfolio.return_value = sample_configs
+        mock_read_gist.return_value = _PEAKS_JSON
+        mock_fetch_price.side_effect = [
+            PriceResult(ticker="AMZN", price=480.0, fetched_at=date(2025, 6, 1)),
+            PriceResult(ticker="MSFT", price=390.0, fetched_at=date(2025, 6, 1)),
+        ]
+
+        run()
+
+        mock_send_fetch_errors.assert_called_once_with([])
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
+    @patch("peakguard.main.send_ath_alert")
+    @patch("peakguard.main.send_alert")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_portfolio")
+    def test_fetch_errors_sends_batch_alert(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_alert: MagicMock,
+        mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
+        mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
+    ) -> None:
+        """Some fetches fail → send_fetch_errors_alert called with FetchErrorData list."""
+        mock_load_portfolio.return_value = sample_configs
+        mock_read_gist.return_value = _PEAKS_JSON
+        mock_fetch_price.side_effect = [
+            FetchError(
+                ticker="AMZN",
+                message="429 Too Many Requests",
+                cause=FetchFailureCause.RATE_LIMIT,
+            ),
+            PriceResult(ticker="MSFT", price=390.0, fetched_at=date(2025, 6, 1)),
+        ]
+
+        run()
+
+        mock_send_fetch_errors.assert_called_once()
+        errors = mock_send_fetch_errors.call_args[0][0]
+        assert len(errors) == 1
+        assert isinstance(errors[0], FetchErrorData)
+        assert errors[0].ticker == "AMZN"
+        assert errors[0].cause == FetchFailureCause.RATE_LIMIT
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
+    @patch("peakguard.main.send_ath_alert")
+    @patch("peakguard.main.send_alert")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_portfolio")
+    def test_fetch_error_alert_failure_does_not_crash(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_alert: MagicMock,
+        mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
+        mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
+    ) -> None:
+        """send_fetch_errors_alert raises NotificationError → run does not crash."""
+        mock_load_portfolio.return_value = sample_configs
+        mock_read_gist.return_value = _PEAKS_JSON
+        mock_fetch_price.side_effect = [
+            FetchError(
+                ticker="AMZN",
+                message="network error",
+                cause=FetchFailureCause.UNKNOWN,
+            ),
+            PriceResult(ticker="MSFT", price=390.0, fetched_at=date(2025, 6, 1)),
+        ]
+        mock_send_fetch_errors.side_effect = NotificationError(
+            message="Telegram down"
+        )
+
+        run()
+
+        mock_write_gist.assert_called_once()
