@@ -11,11 +11,17 @@ from peakguard.errors import FetchFailureCause, NotificationError
 from peakguard.notifier import (
     ATHData,
     AlertData,
+    BounceAlertData,
+    DaysSinceATHAlertData,
     FetchErrorData,
+    ZScoreAlertData,
     send_alert,
     send_alerts,
     send_ath_alert,
+    send_bounce_alert,
+    send_days_since_ath_alert,
     send_fetch_errors_alert,
+    send_zscore_alert,
 )
 
 
@@ -664,3 +670,217 @@ class TestSendFetchErrorsAlert:
         ]
         with pytest.raises(NotificationError, match="network down"):
             send_fetch_errors_alert(errors)
+
+
+# ---------------------------------------------------------------------------
+# DaysSinceATHAlertData + send_days_since_ath_alert
+# ---------------------------------------------------------------------------
+
+
+class TestDaysSinceATHAlertData:
+    """Tests for the DaysSinceATHAlertData dataclass."""
+
+    def test_creation_with_valid_data(self) -> None:
+        data = DaysSinceATHAlertData(ticker="AMZN", days=200, limit=180)
+        assert data.ticker == "AMZN"
+        assert data.days == 200
+        assert data.limit == 180
+
+    def test_is_frozen(self) -> None:
+        data = DaysSinceATHAlertData(ticker="AMZN", days=200, limit=180)
+        with pytest.raises(AttributeError):
+            data.ticker = "MSFT"  # type: ignore[misc]
+
+    def test_rejects_empty_ticker(self) -> None:
+        with pytest.raises(ValueError, match="ticker"):
+            DaysSinceATHAlertData(ticker="", days=200, limit=180)
+
+
+class TestSendDaysSinceATHAlert:
+    """Tests for the send_days_since_ath_alert function."""
+
+    @pytest.fixture(autouse=True)
+    def _set_env(self, mocker) -> None:
+        mocker.patch.dict(
+            os.environ,
+            {"TELEGRAM_BOT_TOKEN": "fake-token-123", "TELEGRAM_CHAT_ID": "99999"},
+        )
+
+    def test_sends_post_request_on_success(self, mocker) -> None:
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        send_days_since_ath_alert(
+            DaysSinceATHAlertData(ticker="AMZN", days=200, limit=180)
+        )
+
+        mock_post.assert_called_once()
+
+    def test_message_contains_details(self, mocker) -> None:
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        send_days_since_ath_alert(
+            DaysSinceATHAlertData(ticker="AMZN", days=200, limit=180)
+        )
+
+        text = mock_post.call_args[1]["json"]["text"]
+        assert "AMZN" in text
+        assert "200" in text
+
+    def test_raises_notification_error_on_failure(self, mocker) -> None:
+        mocker.patch(
+            "peakguard.notifier.requests.post",
+            side_effect=requests.exceptions.ConnectionError("network down"),
+        )
+
+        with pytest.raises(NotificationError):
+            send_days_since_ath_alert(
+                DaysSinceATHAlertData(ticker="AMZN", days=200, limit=180)
+            )
+
+
+# ---------------------------------------------------------------------------
+# ZScoreAlertData + send_zscore_alert
+# ---------------------------------------------------------------------------
+
+
+class TestZScoreAlertData:
+    """Tests for the ZScoreAlertData dataclass."""
+
+    def test_creation_with_valid_data(self) -> None:
+        data = ZScoreAlertData(ticker="NVDA", zscore=-2.5, threshold=-2.0)
+        assert data.ticker == "NVDA"
+        assert data.zscore == -2.5
+        assert data.threshold == -2.0
+
+    def test_is_frozen(self) -> None:
+        data = ZScoreAlertData(ticker="NVDA", zscore=-2.5, threshold=-2.0)
+        with pytest.raises(AttributeError):
+            data.ticker = "MSFT"  # type: ignore[misc]
+
+    def test_rejects_empty_ticker(self) -> None:
+        with pytest.raises(ValueError, match="ticker"):
+            ZScoreAlertData(ticker="", zscore=-2.5, threshold=-2.0)
+
+
+class TestSendZScoreAlert:
+    """Tests for the send_zscore_alert function."""
+
+    @pytest.fixture(autouse=True)
+    def _set_env(self, mocker) -> None:
+        mocker.patch.dict(
+            os.environ,
+            {"TELEGRAM_BOT_TOKEN": "fake-token-123", "TELEGRAM_CHAT_ID": "99999"},
+        )
+
+    def test_sends_post_request_on_success(self, mocker) -> None:
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        send_zscore_alert(ZScoreAlertData(ticker="NVDA", zscore=-2.5, threshold=-2.0))
+
+        mock_post.assert_called_once()
+
+    def test_message_contains_details(self, mocker) -> None:
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        send_zscore_alert(ZScoreAlertData(ticker="NVDA", zscore=-2.5, threshold=-2.0))
+
+        text = mock_post.call_args[1]["json"]["text"]
+        assert "NVDA" in text
+        assert "-2.5" in text
+
+    def test_raises_notification_error_on_failure(self, mocker) -> None:
+        mocker.patch(
+            "peakguard.notifier.requests.post",
+            side_effect=requests.exceptions.ConnectionError("network down"),
+        )
+
+        with pytest.raises(NotificationError):
+            send_zscore_alert(
+                ZScoreAlertData(ticker="NVDA", zscore=-2.5, threshold=-2.0)
+            )
+
+
+# ---------------------------------------------------------------------------
+# BounceAlertData + send_bounce_alert
+# ---------------------------------------------------------------------------
+
+
+class TestBounceAlertData:
+    """Tests for the BounceAlertData dataclass."""
+
+    def test_creation_with_valid_data(self) -> None:
+        data = BounceAlertData(ticker="META", bounce_pct=5.0, min_pct=3.0)
+        assert data.ticker == "META"
+        assert data.bounce_pct == 5.0
+        assert data.min_pct == 3.0
+
+    def test_is_frozen(self) -> None:
+        data = BounceAlertData(ticker="META", bounce_pct=5.0, min_pct=3.0)
+        with pytest.raises(AttributeError):
+            data.ticker = "MSFT"  # type: ignore[misc]
+
+    def test_rejects_empty_ticker(self) -> None:
+        with pytest.raises(ValueError, match="ticker"):
+            BounceAlertData(ticker="", bounce_pct=5.0, min_pct=3.0)
+
+
+class TestSendBounceAlert:
+    """Tests for the send_bounce_alert function."""
+
+    @pytest.fixture(autouse=True)
+    def _set_env(self, mocker) -> None:
+        mocker.patch.dict(
+            os.environ,
+            {"TELEGRAM_BOT_TOKEN": "fake-token-123", "TELEGRAM_CHAT_ID": "99999"},
+        )
+
+    def test_sends_post_request_on_success(self, mocker) -> None:
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        send_bounce_alert(BounceAlertData(ticker="META", bounce_pct=5.0, min_pct=3.0))
+
+        mock_post.assert_called_once()
+
+    def test_message_contains_details(self, mocker) -> None:
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        send_bounce_alert(BounceAlertData(ticker="META", bounce_pct=5.0, min_pct=3.0))
+
+        text = mock_post.call_args[1]["json"]["text"]
+        assert "META" in text
+        assert "5.0" in text
+
+    def test_raises_notification_error_on_failure(self, mocker) -> None:
+        mocker.patch(
+            "peakguard.notifier.requests.post",
+            side_effect=requests.exceptions.ConnectionError("network down"),
+        )
+
+        with pytest.raises(NotificationError):
+            send_bounce_alert(
+                BounceAlertData(ticker="META", bounce_pct=5.0, min_pct=3.0)
+            )
