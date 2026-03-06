@@ -73,7 +73,7 @@ Set the following secrets (used by GitHub Actions):
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot API token |
 | `TELEGRAM_CHAT_ID` | Target chat ID for alerts |
-| `GITHUB_TOKEN` | GitHub personal access token (Gist read/write) |
+| `GIST_PAT` | GitHub personal access token (Gist read/write) |
 | `GIST_ID` | Target Gist ID for `peak_prices.json` |
 
 ### 5. Run

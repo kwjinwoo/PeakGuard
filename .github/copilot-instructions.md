@@ -94,7 +94,7 @@ Assertions:
 
 - **Production persistence** uses GitHub Gist:
   - `gist_client.read_gist()` / `gist_client.write_gist()` for remote I/O.
-  - Requires `GITHUB_TOKEN` and `GIST_ID` environment variables.
+  - Requires `GIST_PAT` and `GIST_ID` environment variables.
 
 - **Local persistence** is available for testing/development:
   - `storage.load_peaks()` / `storage.save_peaks()` for file-based I/O.
@@ -111,7 +111,7 @@ Copilot should not introduce:
 - Configuration: `config/portfolio.yaml` dictates tickers and alert thresholds.
 - Secrets: Handled entirely via `os.environ` (injected by GitHub Actions Secrets).
   - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` — Telegram alerts
-  - `GITHUB_TOKEN` — GitHub Gist API access
+  - `GIST_PAT` — GitHub Gist API access
   - `GIST_ID` — Target Gist ID for `peak_prices.json`
 
 ---

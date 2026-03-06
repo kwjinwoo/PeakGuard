@@ -21,17 +21,17 @@ _REQUEST_TIMEOUT_SECONDS = 10
 
 
 def _get_github_token() -> str:
-    """Read and validate GITHUB_TOKEN from environment variables.
+    """Read and validate GIST_PAT from environment variables.
 
     Returns:
         The GitHub personal access token.
 
     Raises:
-        ValueError: If GITHUB_TOKEN is missing or empty.
+        ValueError: If GIST_PAT is missing or empty.
     """
-    token = os.environ.get("GITHUB_TOKEN", "")
+    token = os.environ.get("GIST_PAT", "")
     if not token:
-        raise ValueError("GITHUB_TOKEN environment variable is required")
+        raise ValueError("GIST_PAT environment variable is required")
     return token
 
 
@@ -61,7 +61,7 @@ def read_gist(*, gist_id: str, filename: str) -> str:
         The raw text content of the file.
 
     Raises:
-        ValueError: If GITHUB_TOKEN is missing (programmer error).
+        ValueError: If GIST_PAT is missing (programmer error).
         GistError: If the API call fails or the file is not found.
     """
     token = _get_github_token()
@@ -93,7 +93,7 @@ def write_gist(*, gist_id: str, filename: str, content: str) -> None:
         content: The new text content for the file.
 
     Raises:
-        ValueError: If GITHUB_TOKEN is missing (programmer error).
+        ValueError: If GIST_PAT is missing (programmer error).
         GistError: If the API call fails.
     """
     token = _get_github_token()

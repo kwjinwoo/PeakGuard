@@ -18,7 +18,7 @@ class TestReadGist:
         """Provide valid GitHub env vars for every test by default."""
         mocker.patch.dict(
             os.environ,
-            {"GITHUB_TOKEN": "ghp_fake_token_123"},
+            {"GIST_PAT": "ghp_fake_token_123"},
         )
 
     def test_returns_file_content_on_success(self, mocker) -> None:
@@ -73,10 +73,10 @@ class TestReadGist:
             read_gist(gist_id="abc123", filename="peak_prices.json")
 
     def test_raises_value_error_when_token_missing(self, mocker) -> None:
-        """Missing GITHUB_TOKEN is a programmer error → ValueError."""
+        """Missing GIST_PAT is a programmer error → ValueError."""
         mocker.patch.dict(os.environ, {}, clear=True)
 
-        with pytest.raises(ValueError, match="GITHUB_TOKEN"):
+        with pytest.raises(ValueError, match="GIST_PAT"):
             read_gist(gist_id="abc123", filename="peak_prices.json")
 
     def test_sets_request_timeout(self, mocker) -> None:
@@ -122,7 +122,7 @@ class TestWriteGist:
         """Provide valid GitHub env vars for every test by default."""
         mocker.patch.dict(
             os.environ,
-            {"GITHUB_TOKEN": "ghp_fake_token_123"},
+            {"GIST_PAT": "ghp_fake_token_123"},
         )
 
     def test_sends_patch_request_on_success(self, mocker) -> None:
@@ -205,10 +205,10 @@ class TestWriteGist:
             )
 
     def test_raises_value_error_when_token_missing(self, mocker) -> None:
-        """Missing GITHUB_TOKEN is a programmer error → ValueError."""
+        """Missing GIST_PAT is a programmer error → ValueError."""
         mocker.patch.dict(os.environ, {}, clear=True)
 
-        with pytest.raises(ValueError, match="GITHUB_TOKEN"):
+        with pytest.raises(ValueError, match="GIST_PAT"):
             write_gist(
                 gist_id="abc123",
                 filename="peak_prices.json",

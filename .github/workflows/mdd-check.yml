@@ -16,7 +16,7 @@ jobs:
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      GITHUB_TOKEN: ${{ secrets.GIST_TOKEN }}
+      GIST_PAT: ${{ secrets.GIST_PAT }}
       GIST_ID: ${{ secrets.GIST_ID }}
 
     steps:
