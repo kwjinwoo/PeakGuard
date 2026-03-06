@@ -12,11 +12,32 @@ from datetime import date, timedelta
 from peakguard.storage import ClosingPrice
 
 __all__ = [
+    "calculate_days_since_ath",
     "calculate_drawdown",
     "check_threshold",
     "get_rolling_ath",
     "update_price_history",
 ]
+
+
+def calculate_days_since_ath(ath_date: date, today: date) -> int:
+    """Calculate the number of calendar days elapsed since the ATH date.
+
+    Args:
+        ath_date: The date the all-time high was reached.
+        today: The current reference date.
+
+    Returns:
+        The number of calendar days between ath_date and today.
+
+    Raises:
+        ValueError: If ath_date is later than today.
+    """
+    if ath_date > today:
+        raise ValueError(
+            f"ath_date ({ath_date}) must not be later than today ({today})"
+        )
+    return (today - ath_date).days
 
 
 def calculate_drawdown(current_price: float, peak_price: float) -> float:
