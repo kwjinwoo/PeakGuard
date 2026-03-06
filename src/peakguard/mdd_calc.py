@@ -8,12 +8,14 @@ No I/O, no network calls, no file system access.
 """
 
 from datetime import date, timedelta
+import statistics
 
 from peakguard.storage import ClosingPrice
 
 __all__ = [
     "calculate_days_since_ath",
     "calculate_drawdown",
+    "calculate_price_zscore",
     "check_threshold",
     "get_rolling_ath",
     "update_price_history",
@@ -38,6 +40,38 @@ def calculate_days_since_ath(ath_date: date, today: date) -> int:
             f"ath_date ({ath_date}) must not be later than today ({today})"
         )
     return (today - ath_date).days
+
+
+def calculate_price_zscore(
+    current_price: float, history: list[ClosingPrice]
+) -> float:
+    """Calculate the Z-score of the current price against the price history.
+
+    Z-score indicates how many standard deviations the current price is
+    above or below the mean of the historical prices.
+
+    Args:
+        current_price: The latest close price.
+        history: A list of ClosingPrice records (at least 2 required).
+
+    Returns:
+        The Z-score rounded to 4 decimal places.
+
+    Raises:
+        ValueError: If history has fewer than 2 entries, or if all
+            prices are identical (standard deviation is zero).
+    """
+    if len(history) < 2:
+        raise ValueError("Need at least 2 price points to compute Z-score")
+
+    prices = [cp.price for cp in history]
+    mean = statistics.mean(prices)
+    std = statistics.stdev(prices)
+
+    if std == 0:
+        raise ValueError("Standard deviation is zero — all prices are identical")
+
+    return round((current_price - mean) / std, 4)
 
 
 def calculate_drawdown(current_price: float, peak_price: float) -> float:
