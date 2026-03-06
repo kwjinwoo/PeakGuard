@@ -18,3 +18,9 @@ tickers:
   GOOGL:
     name: "Google"
     threshold: 15.0
+
+# Global alert thresholds for conditional metric alerts
+alert_thresholds:
+  days_since_ath_limit: 180
+  zscore_threshold: -2.0
+  bounce_from_bottom_min: 3.0
