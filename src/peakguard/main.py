@@ -81,17 +81,35 @@ def run() -> None:
 
         # Update or initialize peak record
         if cfg.ticker in peaks:
-            peaks[cfg.ticker] = update_peak(
-                result.price, peaks[cfg.ticker], result.fetched_at
-            )
+            old_peak = peaks[cfg.ticker]
+            peaks[cfg.ticker] = update_peak(result.price, old_peak, result.fetched_at)
+            ath_updated = peaks[cfg.ticker].peak_price > old_peak.peak_price
         else:
             peaks[cfg.ticker] = PeakRecord(
                 ticker=cfg.ticker,
                 peak_price=result.price,
                 peak_date=result.fetched_at,
             )
+            ath_updated = True
 
         peak = peaks[cfg.ticker]
+
+        # Send ATH alert if peak was updated or newly initialized
+        if ath_updated:
+            ath_data = ATHData(
+                ticker=cfg.ticker,
+                new_peak=peak.peak_price,
+                peak_date=peak.peak_date,
+            )
+            try:
+                send_ath_alert(ath_data)
+                logger.info(
+                    "ATH alert sent for %s (new peak: %.2f)",
+                    cfg.ticker,
+                    peak.peak_price,
+                )
+            except NotificationError as exc:
+                logger.warning("Failed to send ATH alert for %s: %s", cfg.ticker, exc)
 
         # Skip drawdown check if price is at or above ATH
         if result.price >= peak.peak_price:

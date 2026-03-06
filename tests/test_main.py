@@ -337,9 +337,7 @@ class TestRun:
             PriceResult(ticker="AMZN", price=520.0, fetched_at=date(2025, 6, 1)),
             PriceResult(ticker="MSFT", price=400.0, fetched_at=date(2025, 6, 1)),
         ]
-        mock_send_ath_alert.side_effect = NotificationError(
-            message="Telegram down"
-        )
+        mock_send_ath_alert.side_effect = NotificationError(message="Telegram down")
 
         run()
 
