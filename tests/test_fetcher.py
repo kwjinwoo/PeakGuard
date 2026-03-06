@@ -5,8 +5,9 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
+import requests
 
-from peakguard.errors import FetchError
+from peakguard.errors import FetchError, FetchFailureCause
 from peakguard.fetcher import PriceResult, fetch_price, fetch_prices
 
 
@@ -82,8 +83,55 @@ class TestFetchPrice:
         with pytest.raises(ValueError, match="ticker"):
             fetch_price("   ")
 
+    def test_rate_limit_sets_rate_limit_cause(self, mocker) -> None:
+        """HTTP 429 from yfinance → FetchError with RATE_LIMIT cause."""
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        http_error = requests.exceptions.HTTPError(
+            "429 Too Many Requests", response=mock_response
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.history.side_effect = http_error
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
 
-class TestFetchPrices:
+        with pytest.raises(FetchError) as exc_info:
+            fetch_price("AAPL")
+        assert exc_info.value.cause == FetchFailureCause.RATE_LIMIT
+
+    def test_empty_dataframe_sets_empty_data_cause(self, mocker) -> None:
+        """Empty DataFrame from yfinance → FetchError with EMPTY_DATA cause."""
+        mock_ticker = MagicMock()
+        mock_ticker.history.return_value = pd.DataFrame()
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
+
+        with pytest.raises(FetchError) as exc_info:
+            fetch_price("INVALID")
+        assert exc_info.value.cause == FetchFailureCause.EMPTY_DATA
+
+    def test_generic_exception_sets_unknown_cause(self, mocker) -> None:
+        """Non-HTTP exception from yfinance → FetchError with UNKNOWN cause."""
+        mock_ticker = MagicMock()
+        mock_ticker.history.side_effect = RuntimeError("unexpected error")
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
+
+        with pytest.raises(FetchError) as exc_info:
+            fetch_price("MSFT")
+        assert exc_info.value.cause == FetchFailureCause.UNKNOWN
+
+    def test_non_429_http_error_sets_unknown_cause(self, mocker) -> None:
+        """HTTP error other than 429 → FetchError with UNKNOWN cause."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        http_error = requests.exceptions.HTTPError(
+            "500 Internal Server Error", response=mock_response
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.history.side_effect = http_error
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
+
+        with pytest.raises(FetchError) as exc_info:
+            fetch_price("GOOG")
+        assert exc_info.value.cause == FetchFailureCause.UNKNOWN
     """Tests for the fetch_prices function."""
 
     def test_returns_list_of_price_results(self, mocker) -> None:
