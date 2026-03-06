@@ -5,6 +5,7 @@ from datetime import date, timedelta
 import pytest
 
 from peakguard.mdd_calc import (
+    calculate_days_since_ath,
     calculate_drawdown,
     check_threshold,
     get_rolling_ath,
@@ -286,3 +287,43 @@ class TestUpdatePriceHistory:
         )
 
         assert len(history) == original_len
+
+
+# ---------------------------------------------------------------------------
+# Days since ATH: calculate_days_since_ath
+# ---------------------------------------------------------------------------
+
+
+class TestCalculateDaysSinceATH:
+    """Tests for the calculate_days_since_ath function."""
+
+    def test_typical_elapsed_days(self) -> None:
+        """ATH 100 days ago returns 100."""
+        ath_date = date(2025, 11, 27)
+        today = date(2026, 3, 7)
+        assert calculate_days_since_ath(ath_date, today) == 100
+
+    def test_ath_is_today_returns_zero(self) -> None:
+        """ATH on the same day as today returns 0."""
+        today = date(2026, 3, 7)
+        assert calculate_days_since_ath(today, today) == 0
+
+    def test_one_day_ago(self) -> None:
+        """ATH yesterday returns 1."""
+        today = date(2026, 3, 7)
+        yesterday = date(2026, 3, 6)
+        assert calculate_days_since_ath(yesterday, today) == 1
+
+    def test_long_elapsed_period(self) -> None:
+        """ATH over a year ago returns correct large value."""
+        ath_date = date(2024, 1, 1)
+        today = date(2026, 3, 7)
+        expected = (today - ath_date).days
+        assert calculate_days_since_ath(ath_date, today) == expected
+
+    def test_raises_when_ath_date_is_in_the_future(self) -> None:
+        """ATH date after today is invalid → ValueError."""
+        today = date(2026, 3, 7)
+        future = date(2026, 3, 8)
+        with pytest.raises(ValueError, match="ath_date"):
+            calculate_days_since_ath(future, today)
