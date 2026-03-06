@@ -27,29 +27,29 @@ class TestReadGist:
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {
             "files": {
-                "peak_prices.json": {
-                    "content": '{"AAPL": {"peak_price": 250.5, "peak_date": "2026-01-15"}}'
+                "peak_prices.csv": {
+                    "content": "ticker,date,price\nAAPL,2026-01-15,250.5"
                 }
             }
         }
         mocker.patch("peakguard.gist_client.requests.get", return_value=mock_response)
 
-        result = read_gist(gist_id="abc123", filename="peak_prices.json")
+        result = read_gist(gist_id="abc123", filename="peak_prices.csv")
 
-        assert '"AAPL"' in result
-        assert '"peak_price"' in result
+        assert "AAPL" in result
+        assert "250.5" in result
 
     def test_raises_gist_error_when_file_not_in_gist(self, mocker) -> None:
         """Requested filename not found in gist → GistError."""
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {
-            "files": {"other_file.json": {"content": "{}"}}
+            "files": {"other_file.csv": {"content": "ticker,date,price\n"}}
         }
         mocker.patch("peakguard.gist_client.requests.get", return_value=mock_response)
 
-        with pytest.raises(GistError, match="peak_prices.json"):
-            read_gist(gist_id="abc123", filename="peak_prices.json")
+        with pytest.raises(GistError, match="peak_prices.csv"):
+            read_gist(gist_id="abc123", filename="peak_prices.csv")
 
     def test_raises_gist_error_on_http_error(self, mocker) -> None:
         """Non-2xx response from GitHub API → GistError."""
@@ -60,7 +60,7 @@ class TestReadGist:
         mocker.patch("peakguard.gist_client.requests.get", return_value=mock_response)
 
         with pytest.raises(GistError, match="404"):
-            read_gist(gist_id="abc123", filename="peak_prices.json")
+            read_gist(gist_id="abc123", filename="peak_prices.csv")
 
     def test_raises_gist_error_on_network_error(self, mocker) -> None:
         """Network failure is wrapped in GistError."""
@@ -70,27 +70,27 @@ class TestReadGist:
         )
 
         with pytest.raises(GistError, match="network down"):
-            read_gist(gist_id="abc123", filename="peak_prices.json")
+            read_gist(gist_id="abc123", filename="peak_prices.csv")
 
     def test_raises_value_error_when_token_missing(self, mocker) -> None:
         """Missing GIST_PAT is a programmer error → ValueError."""
         mocker.patch.dict(os.environ, {}, clear=True)
 
         with pytest.raises(ValueError, match="GIST_PAT"):
-            read_gist(gist_id="abc123", filename="peak_prices.json")
+            read_gist(gist_id="abc123", filename="peak_prices.csv")
 
     def test_sets_request_timeout(self, mocker) -> None:
         """requests.get is called with a timeout parameter."""
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {
-            "files": {"peak_prices.json": {"content": "{}"}}
+            "files": {"peak_prices.csv": {"content": "ticker,date,price\n"}}
         }
         mock_get = mocker.patch(
             "peakguard.gist_client.requests.get", return_value=mock_response
         )
 
-        read_gist(gist_id="abc123", filename="peak_prices.json")
+        read_gist(gist_id="abc123", filename="peak_prices.csv")
 
         call_kwargs = mock_get.call_args[1]
         assert "timeout" in call_kwargs
@@ -101,13 +101,13 @@ class TestReadGist:
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {
-            "files": {"peak_prices.json": {"content": "{}"}}
+            "files": {"peak_prices.csv": {"content": "ticker,date,price\n"}}
         }
         mock_get = mocker.patch(
             "peakguard.gist_client.requests.get", return_value=mock_response
         )
 
-        read_gist(gist_id="abc123", filename="peak_prices.json")
+        read_gist(gist_id="abc123", filename="peak_prices.csv")
 
         call_kwargs = mock_get.call_args[1]
         assert "Authorization" in call_kwargs.get("headers", {})
@@ -135,8 +135,8 @@ class TestWriteGist:
 
         write_gist(
             gist_id="abc123",
-            filename="peak_prices.json",
-            content='{"AAPL": {"peak_price": 250.5}}',
+            filename="peak_prices.csv",
+            content="ticker,date,price\nAAPL,2026-01-15,250.5",
         )
 
         mock_patch.assert_called_once()
@@ -151,15 +151,18 @@ class TestWriteGist:
 
         write_gist(
             gist_id="abc123",
-            filename="peak_prices.json",
-            content='{"data": "test"}',
+            filename="peak_prices.csv",
+            content="ticker,date,price\nAAPL,2026-01-15,250.5",
         )
 
         call_kwargs = mock_patch.call_args[1]
         payload = call_kwargs["json"]
         assert "files" in payload
-        assert "peak_prices.json" in payload["files"]
-        assert payload["files"]["peak_prices.json"]["content"] == '{"data": "test"}'
+        assert "peak_prices.csv" in payload["files"]
+        assert (
+            payload["files"]["peak_prices.csv"]["content"]
+            == "ticker,date,price\nAAPL,2026-01-15,250.5"
+        )
 
     def test_raises_gist_error_on_http_error(self, mocker) -> None:
         """Non-2xx response from GitHub API → GistError."""
@@ -172,8 +175,8 @@ class TestWriteGist:
         with pytest.raises(GistError, match="422"):
             write_gist(
                 gist_id="abc123",
-                filename="peak_prices.json",
-                content="{}",
+                filename="peak_prices.csv",
+                content="ticker,date,price\n",
             )
 
     def test_raises_gist_error_on_network_error(self, mocker) -> None:
@@ -186,8 +189,8 @@ class TestWriteGist:
         with pytest.raises(GistError, match="network down"):
             write_gist(
                 gist_id="abc123",
-                filename="peak_prices.json",
-                content="{}",
+                filename="peak_prices.csv",
+                content="ticker,date,price\n",
             )
 
     def test_raises_gist_error_on_timeout(self, mocker) -> None:
@@ -200,8 +203,8 @@ class TestWriteGist:
         with pytest.raises(GistError, match="timed out"):
             write_gist(
                 gist_id="abc123",
-                filename="peak_prices.json",
-                content="{}",
+                filename="peak_prices.csv",
+                content="ticker,date,price\n",
             )
 
     def test_raises_value_error_when_token_missing(self, mocker) -> None:
@@ -211,8 +214,8 @@ class TestWriteGist:
         with pytest.raises(ValueError, match="GIST_PAT"):
             write_gist(
                 gist_id="abc123",
-                filename="peak_prices.json",
-                content="{}",
+                filename="peak_prices.csv",
+                content="ticker,date,price\n",
             )
 
     def test_sets_request_timeout(self, mocker) -> None:
@@ -225,8 +228,8 @@ class TestWriteGist:
 
         write_gist(
             gist_id="abc123",
-            filename="peak_prices.json",
-            content="{}",
+            filename="peak_prices.csv",
+            content="ticker,date,price\n",
         )
 
         call_kwargs = mock_patch.call_args[1]
@@ -243,8 +246,8 @@ class TestWriteGist:
 
         write_gist(
             gist_id="abc123",
-            filename="peak_prices.json",
-            content="{}",
+            filename="peak_prices.csv",
+            content="ticker,date,price\n",
         )
 
         call_kwargs = mock_patch.call_args[1]
