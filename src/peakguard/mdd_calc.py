@@ -9,13 +9,12 @@ No I/O, no network calls, no file system access.
 
 from datetime import date, timedelta
 
-from peakguard.storage import ClosingPrice, PeakRecord
+from peakguard.storage import ClosingPrice
 
 __all__ = [
     "calculate_drawdown",
     "check_threshold",
     "get_rolling_ath",
-    "update_peak",
     "update_price_history",
 ]
 
@@ -73,38 +72,6 @@ def check_threshold(drawdown_pct: float, threshold: float) -> bool:
         raise ValueError(f"threshold must be in the range (0, 100], got {threshold}")
 
     return drawdown_pct >= threshold
-
-
-def update_peak(current_price: float, record: PeakRecord, today: date) -> PeakRecord:
-    """Return an updated peak record if the current price is a new ATH.
-
-    If current_price exceeds the stored peak, a new PeakRecord is
-    created with the updated price and date. Otherwise, the original
-    record is returned unchanged.
-
-    Args:
-        current_price: The latest close price. Must be positive.
-        record: The existing peak record to compare against.
-        today: The date to assign if a new ATH is reached.
-
-    Returns:
-        A new PeakRecord if a new ATH is reached, otherwise the
-        original record.
-
-    Raises:
-        ValueError: If current_price is not positive.
-    """
-    if current_price <= 0:
-        raise ValueError(f"current_price must be positive, got {current_price}")
-
-    if current_price > record.peak_price:
-        return PeakRecord(
-            ticker=record.ticker,
-            peak_price=current_price,
-            peak_date=today,
-        )
-
-    return record
 
 
 def get_rolling_ath(
