@@ -89,6 +89,7 @@ class TestFetchFailureCause:
             FetchFailureCause.UNKNOWN,
         }
         assert len(causes) == 3
+
     """Tests for the NotificationError exception."""
 
     def test_inherits_from_peakguard_error(self) -> None:
