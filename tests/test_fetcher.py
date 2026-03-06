@@ -8,7 +8,8 @@ import pytest
 import requests
 
 from peakguard.errors import FetchError, FetchFailureCause
-from peakguard.fetcher import PriceResult, fetch_price, fetch_prices
+from peakguard.fetcher import PriceResult, fetch_history, fetch_price, fetch_prices
+from peakguard.storage import ClosingPrice
 
 
 class TestPriceResult:
@@ -194,3 +195,120 @@ class TestFetchPrice:
         """Empty ticker list returns empty result list."""
         results = fetch_prices([])
         assert results == []
+
+
+class TestFetchHistory:
+    """Tests for the fetch_history function."""
+
+    def test_returns_list_of_closing_prices(self, mocker) -> None:
+        """Happy path: yfinance returns 1-year history as list[ClosingPrice]."""
+        mock_history = pd.DataFrame(
+            {"Close": [150.0, 155.0, 160.0]},
+            index=pd.DatetimeIndex(
+                [
+                    pd.Timestamp("2025-03-06"),
+                    pd.Timestamp("2025-03-07"),
+                    pd.Timestamp("2025-03-10"),
+                ]
+            ),
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.history.return_value = mock_history
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
+
+        result = fetch_history("AAPL")
+
+        assert len(result) == 3
+        assert all(isinstance(cp, ClosingPrice) for cp in result)
+        assert result[0].ticker == "AAPL"
+        assert result[0].price == 150.0
+        assert result[0].date == date(2025, 3, 6)
+        assert result[2].price == 160.0
+
+    def test_calls_yfinance_with_1y_period(self, mocker) -> None:
+        """yfinance.Ticker.history is called with period='1y' by default."""
+        mock_history = pd.DataFrame(
+            {"Close": [150.0]},
+            index=pd.DatetimeIndex([pd.Timestamp("2025-03-06")]),
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.history.return_value = mock_history
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
+
+        fetch_history("AAPL")
+
+        mock_ticker.history.assert_called_once_with(period="1y")
+
+    def test_custom_period_passed_to_yfinance(self, mocker) -> None:
+        """Custom period parameter is forwarded to yfinance."""
+        mock_history = pd.DataFrame(
+            {"Close": [150.0]},
+            index=pd.DatetimeIndex([pd.Timestamp("2025-03-06")]),
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.history.return_value = mock_history
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
+
+        fetch_history("AAPL", period="6mo")
+
+        mock_ticker.history.assert_called_once_with(period="6mo")
+
+    def test_returns_sorted_by_date_ascending(self, mocker) -> None:
+        """Returned list is sorted by date ascending."""
+        mock_history = pd.DataFrame(
+            {"Close": [160.0, 150.0, 155.0]},
+            index=pd.DatetimeIndex(
+                [
+                    pd.Timestamp("2025-03-10"),
+                    pd.Timestamp("2025-03-06"),
+                    pd.Timestamp("2025-03-07"),
+                ]
+            ),
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.history.return_value = mock_history
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
+
+        result = fetch_history("AAPL")
+
+        dates = [cp.date for cp in result]
+        assert dates == sorted(dates)
+
+    def test_raises_fetch_error_on_empty_dataframe(self, mocker) -> None:
+        """Empty DataFrame raises FetchError with EMPTY_DATA cause."""
+        mock_ticker = MagicMock()
+        mock_ticker.history.return_value = pd.DataFrame()
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
+
+        with pytest.raises(FetchError) as exc_info:
+            fetch_history("INVALID")
+        assert exc_info.value.cause == FetchFailureCause.EMPTY_DATA
+
+    def test_raises_fetch_error_on_network_error(self, mocker) -> None:
+        """Network error is wrapped in FetchError."""
+        mock_ticker = MagicMock()
+        mock_ticker.history.side_effect = ConnectionError("network down")
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
+
+        with pytest.raises(FetchError, match="network down"):
+            fetch_history("AAPL")
+
+    def test_rate_limit_sets_rate_limit_cause(self, mocker) -> None:
+        """HTTP 429 from yfinance → FetchError with RATE_LIMIT cause."""
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        http_error = requests.exceptions.HTTPError(
+            "429 Too Many Requests", response=mock_response
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.history.side_effect = http_error
+        mocker.patch("peakguard.fetcher.yfinance.Ticker", return_value=mock_ticker)
+
+        with pytest.raises(FetchError) as exc_info:
+            fetch_history("AAPL")
+        assert exc_info.value.cause == FetchFailureCause.RATE_LIMIT
+
+    def test_raises_value_error_on_empty_ticker(self) -> None:
+        """Empty ticker string is a programmer error → ValueError."""
+        with pytest.raises(ValueError, match="ticker"):
+            fetch_history("")
