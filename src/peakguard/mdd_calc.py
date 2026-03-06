@@ -7,11 +7,17 @@ and updating all-time high (ATH) records.
 No I/O, no network calls, no file system access.
 """
 
-from datetime import date
+from datetime import date, timedelta
 
-from peakguard.storage import PeakRecord
+from peakguard.storage import ClosingPrice, PeakRecord
 
-__all__ = ["calculate_drawdown", "check_threshold", "update_peak"]
+__all__ = [
+    "calculate_drawdown",
+    "check_threshold",
+    "get_rolling_ath",
+    "update_peak",
+    "update_price_history",
+]
 
 
 def calculate_drawdown(current_price: float, peak_price: float) -> float:
@@ -99,3 +105,73 @@ def update_peak(current_price: float, record: PeakRecord, today: date) -> PeakRe
         )
 
     return record
+
+
+def get_rolling_ath(
+    history: list[ClosingPrice], today: date, window_days: int = 365
+) -> float:
+    """Return the highest price within the rolling window.
+
+    Only prices whose date falls within ``[today - window_days, today]``
+    (inclusive on both ends) are considered.
+
+    Args:
+        history: A list of ClosingPrice records.
+        today: The reference date for the window endpoint.
+        window_days: The lookback window size in calendar days.
+
+    Returns:
+        The maximum closing price within the window.
+
+    Raises:
+        ValueError: If history is empty or no prices fall within the window.
+    """
+    if not history:
+        raise ValueError("history must not be empty")
+
+    cutoff = today - timedelta(days=window_days)
+    in_window = [cp for cp in history if cutoff <= cp.date <= today]
+
+    if not in_window:
+        raise ValueError(
+            f"No prices found within the {window_days}-day window ending {today}"
+        )
+
+    return max(cp.price for cp in in_window)
+
+
+def update_price_history(
+    history: list[ClosingPrice],
+    *,
+    ticker: str,
+    price: float,
+    today: date,
+    window_days: int = 365,
+) -> list[ClosingPrice]:
+    """Append today's price and trim entries outside the rolling window.
+
+    If an entry for ``today`` already exists, it is replaced (upsert).
+    The returned list is sorted by date ascending and contains only
+    entries within ``[today - window_days, today]``.
+
+    The original list is not mutated.
+
+    Args:
+        history: Existing price history for one ticker.
+        ticker: The ticker symbol.
+        price: Today's closing price.
+        today: The current date.
+        window_days: The rolling window size in calendar days.
+
+    Returns:
+        A new list of ClosingPrice, trimmed and sorted.
+    """
+    cutoff = today - timedelta(days=window_days)
+    new_entry = ClosingPrice(ticker=ticker, date=today, price=price)
+
+    # Filter: keep entries in window, exclude today (will be re-added)
+    kept = [cp for cp in history if cutoff <= cp.date <= today and cp.date != today]
+    kept.append(new_entry)
+    kept.sort(key=lambda cp: cp.date)
+
+    return kept
