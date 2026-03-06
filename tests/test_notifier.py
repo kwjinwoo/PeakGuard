@@ -7,13 +7,15 @@ from unittest.mock import MagicMock
 import pytest
 import requests
 
-from peakguard.errors import NotificationError
+from peakguard.errors import FetchFailureCause, NotificationError
 from peakguard.notifier import (
     ATHData,
     AlertData,
+    FetchErrorData,
     send_alert,
     send_alerts,
     send_ath_alert,
+    send_fetch_errors_alert,
 )
 
 
@@ -500,3 +502,165 @@ class TestSendAthAlert:
         call_kwargs = mock_post.call_args[1]
         assert "timeout" in call_kwargs
         assert call_kwargs["timeout"] > 0
+
+
+class TestFetchErrorData:
+    """Tests for the FetchErrorData dataclass."""
+
+    def test_creation_with_valid_data(self) -> None:
+        """Stores all fields correctly."""
+        data = FetchErrorData(
+            ticker="AAPL",
+            cause=FetchFailureCause.RATE_LIMIT,
+            reason="429 Too Many Requests",
+        )
+        assert data.ticker == "AAPL"
+        assert data.cause == FetchFailureCause.RATE_LIMIT
+        assert data.reason == "429 Too Many Requests"
+
+    def test_is_frozen(self) -> None:
+        """FetchErrorData instances are immutable."""
+        data = FetchErrorData(
+            ticker="AAPL",
+            cause=FetchFailureCause.UNKNOWN,
+            reason="error",
+        )
+        with pytest.raises(AttributeError):
+            data.ticker = "MSFT"  # type: ignore[misc]
+
+    def test_rejects_empty_ticker(self) -> None:
+        """Empty ticker is a programmer error → ValueError."""
+        with pytest.raises(ValueError, match="ticker"):
+            FetchErrorData(
+                ticker="",
+                cause=FetchFailureCause.UNKNOWN,
+                reason="error",
+            )
+
+    def test_rejects_whitespace_ticker(self) -> None:
+        """Whitespace-only ticker is a programmer error → ValueError."""
+        with pytest.raises(ValueError, match="ticker"):
+            FetchErrorData(
+                ticker="   ",
+                cause=FetchFailureCause.UNKNOWN,
+                reason="error",
+            )
+
+
+class TestSendFetchErrorsAlert:
+    """Tests for the send_fetch_errors_alert function."""
+
+    @pytest.fixture(autouse=True)
+    def _set_env(self, mocker) -> None:
+        """Provide valid Telegram env vars for every test by default."""
+        mocker.patch.dict(
+            os.environ,
+            {
+                "TELEGRAM_BOT_TOKEN": "fake-token-123",
+                "TELEGRAM_CHAT_ID": "99999",
+            },
+        )
+
+    def test_does_not_send_when_empty_list(self, mocker) -> None:
+        """No errors → no Telegram API call."""
+        mock_post = mocker.patch("peakguard.notifier.requests.post")
+
+        send_fetch_errors_alert([])
+
+        mock_post.assert_not_called()
+
+    def test_sends_rate_limit_errors(self, mocker) -> None:
+        """Rate limit errors appear in a dedicated section."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        errors = [
+            FetchErrorData(
+                ticker="AMZN",
+                cause=FetchFailureCause.RATE_LIMIT,
+                reason="429 Too Many Requests",
+            ),
+        ]
+        send_fetch_errors_alert(errors)
+
+        mock_post.assert_called_once()
+        text = mock_post.call_args[1]["json"]["text"]
+        assert "Rate Limit" in text
+        assert "AMZN" in text
+
+    def test_sends_other_errors(self, mocker) -> None:
+        """Non-rate-limit errors appear in a dedicated section."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        errors = [
+            FetchErrorData(
+                ticker="NVDA",
+                cause=FetchFailureCause.EMPTY_DATA,
+                reason="no price data returned",
+            ),
+        ]
+        send_fetch_errors_alert(errors)
+
+        mock_post.assert_called_once()
+        text = mock_post.call_args[1]["json"]["text"]
+        assert "Other" in text
+        assert "NVDA" in text
+
+    def test_mixed_errors_have_separate_sections(self, mocker) -> None:
+        """Mixed causes produce both rate-limit and other sections."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post = mocker.patch(
+            "peakguard.notifier.requests.post", return_value=mock_response
+        )
+
+        errors = [
+            FetchErrorData(
+                ticker="AMZN",
+                cause=FetchFailureCause.RATE_LIMIT,
+                reason="429 Too Many Requests",
+            ),
+            FetchErrorData(
+                ticker="NVDA",
+                cause=FetchFailureCause.EMPTY_DATA,
+                reason="no price data returned",
+            ),
+            FetchErrorData(
+                ticker="GOOG",
+                cause=FetchFailureCause.UNKNOWN,
+                reason="connection timeout",
+            ),
+        ]
+        send_fetch_errors_alert(errors)
+
+        mock_post.assert_called_once()
+        text = mock_post.call_args[1]["json"]["text"]
+        assert "Rate Limit" in text
+        assert "AMZN" in text
+        assert "Other" in text
+        assert "NVDA" in text
+        assert "GOOG" in text
+
+    def test_raises_notification_error_on_http_failure(self, mocker) -> None:
+        """Telegram API failure → NotificationError."""
+        mocker.patch(
+            "peakguard.notifier.requests.post",
+            side_effect=requests.exceptions.ConnectionError("network down"),
+        )
+
+        errors = [
+            FetchErrorData(
+                ticker="AMZN",
+                cause=FetchFailureCause.RATE_LIMIT,
+                reason="429 Too Many Requests",
+            ),
+        ]
+        with pytest.raises(NotificationError, match="network down"):
+            send_fetch_errors_alert(errors)
