@@ -5,6 +5,7 @@ from datetime import date, timedelta
 import pytest
 
 from peakguard.mdd_calc import (
+    calculate_bounce_from_bottom,
     calculate_days_since_ath,
     calculate_drawdown,
     calculate_price_zscore,
@@ -399,3 +400,61 @@ class TestCalculatePriceZscore:
         history = self._make_history(prices=[100.0, 100.0, 100.0])
         with pytest.raises(ValueError, match="zero"):
             calculate_price_zscore(100.0, history)
+
+
+# ---------------------------------------------------------------------------
+# Bounce from bottom: calculate_bounce_from_bottom
+# ---------------------------------------------------------------------------
+
+
+class TestCalculateBounceFromBottom:
+    """Tests for the calculate_bounce_from_bottom function."""
+
+    @staticmethod
+    def _make_history(
+        ticker: str = "AAPL",
+        prices: list[float] | None = None,
+    ) -> list[ClosingPrice]:
+        if prices is None:
+            prices = [100.0, 90.0, 110.0, 95.0, 105.0]
+        base_date = date(2026, 1, 1)
+        return [
+            ClosingPrice(ticker=ticker, date=base_date + timedelta(days=i), price=p)
+            for i, p in enumerate(prices)
+        ]
+
+    def test_typical_bounce(self) -> None:
+        """Low=90, current=105 → (105−90)/90*100 = 16.67%."""
+        history = self._make_history(prices=[100.0, 90.0, 110.0, 95.0])
+        result = calculate_bounce_from_bottom(105.0, history)
+        assert result == 16.67
+
+    def test_current_at_low_returns_zero(self) -> None:
+        """Current price equals the 1-year low → 0.0%."""
+        history = self._make_history(prices=[100.0, 90.0, 110.0])
+        result = calculate_bounce_from_bottom(90.0, history)
+        assert result == 0.0
+
+    def test_small_bounce(self) -> None:
+        """Low=100, current=103 → 3.0%."""
+        history = self._make_history(prices=[100.0, 150.0, 120.0])
+        result = calculate_bounce_from_bottom(103.0, history)
+        assert result == 3.0
+
+    def test_large_bounce(self) -> None:
+        """Low=50, current=100 → 100.0%."""
+        history = self._make_history(prices=[200.0, 50.0, 80.0])
+        result = calculate_bounce_from_bottom(100.0, history)
+        assert result == 100.0
+
+    def test_result_rounded_to_two_decimals(self) -> None:
+        """Result is rounded to 2 decimal places."""
+        history = self._make_history(prices=[100.0, 90.0])
+        result = calculate_bounce_from_bottom(91.0, history)
+        # (91-90)/90*100 = 1.1111... → 1.11
+        assert result == 1.11
+
+    def test_raises_when_history_is_empty(self) -> None:
+        """Empty history → ValueError."""
+        with pytest.raises(ValueError, match="history"):
+            calculate_bounce_from_bottom(100.0, [])
