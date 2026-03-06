@@ -1,18 +1,25 @@
 """Main orchestration module — coordinates the daily MDD check pipeline.
 
 This module ties together all layers: loading configuration, fetching
-prices, calculating drawdowns, sending alerts, and persisting ATH data.
+prices, calculating drawdowns, sending alerts, and persisting price
+history data using a rolling window ATH strategy.
 """
 
 import logging
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from peakguard.config import load_portfolio
 from peakguard.errors import FetchError, GistError, NotificationError
-from peakguard.fetcher import fetch_price
+from peakguard.fetcher import fetch_history, fetch_price
 from peakguard.gist_client import read_gist, write_gist
-from peakguard.mdd_calc import calculate_drawdown, check_threshold, update_peak
+from peakguard.mdd_calc import (
+    calculate_drawdown,
+    check_threshold,
+    get_rolling_ath,
+    update_price_history,
+)
 from peakguard.notifier import (
     ATHData,
     AlertData,
@@ -21,7 +28,7 @@ from peakguard.notifier import (
     send_ath_alert,
     send_fetch_errors_alert,
 )
-from peakguard.storage import PeakRecord, deserialize_peaks, serialize_peaks
+from peakguard.storage import ClosingPrice, deserialize_history, serialize_history
 
 __all__ = ["run"]
 
@@ -30,14 +37,15 @@ logger = logging.getLogger(__name__)
 _CONFIG_PATH = (
     Path(__file__).resolve().parent.parent.parent / "config" / "portfolio.yaml"
 )
-_GIST_FILENAME = "peak_prices.json"
+_GIST_FILENAME = "peak_prices.csv"
+_WINDOW_DAYS = 365
 
 
-def _load_peaks_from_gist() -> dict[str, PeakRecord]:
-    """Load peak records from the GitHub Gist.
+def _load_history_from_gist() -> dict[str, list[ClosingPrice]]:
+    """Load price history from the GitHub Gist.
 
     Returns:
-        A dict of ticker → PeakRecord. Empty dict if the gist
+        A dict of ticker → list[ClosingPrice]. Empty dict if the gist
         file does not exist yet (first-run scenario).
     """
     gist_id = os.environ.get("GIST_ID", "")
@@ -46,111 +54,131 @@ def _load_peaks_from_gist() -> dict[str, PeakRecord]:
 
     try:
         content = read_gist(gist_id=gist_id, filename=_GIST_FILENAME)
-        return deserialize_peaks(content)
+        return deserialize_history(content)
     except GistError:
-        logger.info("No existing peak data found in gist, starting fresh")
+        logger.info("No existing history found in gist, starting fresh")
         return {}
 
 
-def _save_peaks_to_gist(records: dict[str, PeakRecord]) -> None:
-    """Save peak records to the GitHub Gist.
+def _save_history_to_gist(records: dict[str, list[ClosingPrice]]) -> None:
+    """Save price history to the GitHub Gist.
 
     Args:
-        records: The peak records to persist.
+        records: The price history to persist.
     """
     gist_id = os.environ.get("GIST_ID", "")
     if not gist_id:
         raise ValueError("GIST_ID environment variable is required")
 
-    content = serialize_peaks(records)
+    content = serialize_history(records)
     write_gist(gist_id=gist_id, filename=_GIST_FILENAME, content=content)
 
 
 def run() -> None:
-    """Execute the daily MDD check pipeline.
+    """Execute the daily MDD check pipeline with rolling window ATH.
 
     Steps:
         1. Load portfolio configuration from YAML.
-        2. Load existing ATH records from Gist.
-        3. For each ticker: fetch price, update peak, check threshold.
-        4. Send Telegram alerts for any threshold breaches.
-        5. Save updated ATH records back to Gist.
+        2. Load existing price history from Gist (CSV).
+        3. For each ticker:
+           a. Bootstrap (fetch 1-year history) if no prior data exists.
+           b. Otherwise fetch today's price and append to history.
+           c. Detect rolling ATH changes and send ATH alerts.
+           d. Calculate drawdown and send MDD alerts if threshold breached.
+        4. Send batch fetch error alerts.
+        5. Save updated history back to Gist.
     """
     configs = load_portfolio(_CONFIG_PATH)
-    peaks = _load_peaks_from_gist()
+    history = _load_history_from_gist()
     fetch_errors: list[FetchErrorData] = []
 
     for cfg in configs:
-        try:
-            result = fetch_price(cfg.ticker)
-        except FetchError as exc:
-            logger.warning("Skipping %s: %s", cfg.ticker, exc)
-            fetch_errors.append(
-                FetchErrorData(
-                    ticker=cfg.ticker,
-                    cause=exc.cause,
-                    reason=str(exc),
+        ticker = cfg.ticker
+
+        if ticker not in history or not history[ticker]:
+            # Bootstrap: fetch 1 year of history for new tickers
+            try:
+                closing_prices = fetch_history(ticker)
+            except FetchError as exc:
+                logger.warning("Skipping %s: %s", ticker, exc)
+                fetch_errors.append(
+                    FetchErrorData(ticker=ticker, cause=exc.cause, reason=str(exc))
                 )
-            )
-            continue
+                continue
 
-        # Update or initialize peak record
-        if cfg.ticker in peaks:
-            old_peak = peaks[cfg.ticker]
-            peaks[cfg.ticker] = update_peak(result.price, old_peak, result.fetched_at)
-            ath_updated = peaks[cfg.ticker].peak_price > old_peak.peak_price
+            history[ticker] = closing_prices
+            current_price = closing_prices[-1].price
+            reference_date = closing_prices[-1].date
+            old_ath = None
         else:
-            peaks[cfg.ticker] = PeakRecord(
-                ticker=cfg.ticker,
-                peak_price=result.price,
-                peak_date=result.fetched_at,
+            # Daily: compute old ATH, fetch today's price, update history
+            previous_date = history[ticker][-1].date
+            try:
+                old_ath = get_rolling_ath(history[ticker], previous_date, _WINDOW_DAYS)
+            except ValueError:
+                old_ath = None
+
+            try:
+                result = fetch_price(ticker)
+            except FetchError as exc:
+                logger.warning("Skipping %s: %s", ticker, exc)
+                fetch_errors.append(
+                    FetchErrorData(ticker=ticker, cause=exc.cause, reason=str(exc))
+                )
+                continue
+
+            history[ticker] = update_price_history(
+                history[ticker],
+                ticker=ticker,
+                price=result.price,
+                today=result.fetched_at,
+                window_days=_WINDOW_DAYS,
             )
-            ath_updated = True
+            current_price = result.price
+            reference_date = result.fetched_at
 
-        peak = peaks[cfg.ticker]
+        # Compute new rolling ATH
+        new_ath = get_rolling_ath(history[ticker], reference_date, _WINDOW_DAYS)
 
-        # Send ATH alert if peak was updated or newly initialized
-        if ath_updated:
+        # ATH change detection (new high, window expiry, or bootstrap)
+        if old_ath is None or new_ath != old_ath:
+            cutoff = reference_date - timedelta(days=_WINDOW_DAYS)
+            ath_entry = max(
+                (cp for cp in history[ticker] if cutoff <= cp.date <= reference_date),
+                key=lambda cp: cp.price,
+            )
             ath_data = ATHData(
-                ticker=cfg.ticker,
-                new_peak=peak.peak_price,
-                peak_date=peak.peak_date,
+                ticker=ticker, new_peak=new_ath, peak_date=ath_entry.date
             )
             try:
                 send_ath_alert(ath_data)
-                logger.info(
-                    "ATH alert sent for %s (new peak: %.2f)",
-                    cfg.ticker,
-                    peak.peak_price,
-                )
+                logger.info("ATH alert: %s → %.2f", ticker, new_ath)
             except NotificationError as exc:
-                logger.warning("Failed to send ATH alert for %s: %s", cfg.ticker, exc)
+                logger.warning("Failed to send ATH alert for %s: %s", ticker, exc)
 
         # Skip drawdown check if price is at or above ATH
-        if result.price >= peak.peak_price:
+        if current_price >= new_ath:
             continue
 
-        drawdown = calculate_drawdown(result.price, peak.peak_price)
+        drawdown = calculate_drawdown(current_price, new_ath)
 
         if check_threshold(drawdown, cfg.threshold):
             alert = AlertData(
-                ticker=cfg.ticker,
-                current_price=result.price,
-                peak_price=peak.peak_price,
+                ticker=ticker,
+                current_price=current_price,
+                peak_price=new_ath,
                 drawdown_pct=drawdown,
             )
             try:
                 send_alert(alert)
-                logger.info(
-                    "Alert sent for %s (drawdown: %.2f%%)", cfg.ticker, drawdown
-                )
+                logger.info("MDD alert: %s (drawdown: %.2f%%)", ticker, drawdown)
             except NotificationError as exc:
-                logger.warning("Failed to send alert for %s: %s", cfg.ticker, exc)
+                logger.warning("Failed to send alert for %s: %s", ticker, exc)
 
     try:
         send_fetch_errors_alert(fetch_errors)
     except NotificationError as exc:
         logger.warning("Failed to send fetch error alert: %s", exc)
 
-    _save_peaks_to_gist(peaks)
-    logger.info("Peak records updated successfully")
+    _save_history_to_gist(history)
+    logger.info("History records updated successfully")
