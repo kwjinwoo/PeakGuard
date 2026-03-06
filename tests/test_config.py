@@ -4,7 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from peakguard.config import AlertThresholds, TickerConfig, load_alert_thresholds, load_portfolio
+from peakguard.config import (
+    AlertThresholds,
+    TickerConfig,
+    load_alert_thresholds,
+    load_portfolio,
+)
 
 
 class TestTickerConfig:

@@ -142,7 +142,11 @@ def load_alert_thresholds(path: Path) -> AlertThresholds:
         raise ValueError("Config YAML must contain an 'alert_thresholds' key")
 
     section = raw["alert_thresholds"]
-    required_keys = ["days_since_ath_limit", "zscore_threshold", "bounce_from_bottom_min"]
+    required_keys = [
+        "days_since_ath_limit",
+        "zscore_threshold",
+        "bounce_from_bottom_min",
+    ]
 
     for key in required_keys:
         if key not in section:

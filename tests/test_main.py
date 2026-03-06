@@ -60,6 +60,24 @@ _EXPIRY_HISTORY_CSV = (
 class TestRun:
     """Tests for the run() orchestration function with rolling window ATH."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_metric_alerts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Mock metric alert functions and load_alert_thresholds for all tests."""
+        import peakguard.main as main_mod
+
+        monkeypatch.setattr(
+            main_mod,
+            "load_alert_thresholds",
+            lambda _: AlertThresholds(
+                days_since_ath_limit=180,
+                zscore_threshold=-2.0,
+                bounce_from_bottom_min=3.0,
+            ),
+        )
+        monkeypatch.setattr(main_mod, "send_days_since_ath_alert", MagicMock())
+        monkeypatch.setattr(main_mod, "send_zscore_alert", MagicMock())
+        monkeypatch.setattr(main_mod, "send_bounce_alert", MagicMock())
+
     @patch("peakguard.main.write_gist")
     @patch("peakguard.main.send_fetch_errors_alert")
     @patch("peakguard.main.send_ath_alert")
@@ -506,6 +524,24 @@ class TestRun:
 
 class TestRunFetchErrorNotification:
     """Tests for batch fetch-error notification in run()."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_metric_alerts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Mock metric alert functions and load_alert_thresholds for all tests."""
+        import peakguard.main as main_mod
+
+        monkeypatch.setattr(
+            main_mod,
+            "load_alert_thresholds",
+            lambda _: AlertThresholds(
+                days_since_ath_limit=180,
+                zscore_threshold=-2.0,
+                bounce_from_bottom_min=3.0,
+            ),
+        )
+        monkeypatch.setattr(main_mod, "send_days_since_ath_alert", MagicMock())
+        monkeypatch.setattr(main_mod, "send_zscore_alert", MagicMock())
+        monkeypatch.setattr(main_mod, "send_bounce_alert", MagicMock())
 
     @patch("peakguard.main.write_gist")
     @patch("peakguard.main.send_fetch_errors_alert")

@@ -43,9 +43,7 @@ def calculate_days_since_ath(ath_date: date, today: date) -> int:
     return (today - ath_date).days
 
 
-def calculate_price_zscore(
-    current_price: float, history: list[ClosingPrice]
-) -> float:
+def calculate_price_zscore(current_price: float, history: list[ClosingPrice]) -> float:
     """Calculate the Z-score of the current price against the price history.
 
     Z-score indicates how many standard deviations the current price is

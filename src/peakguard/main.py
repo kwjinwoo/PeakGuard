@@ -10,12 +10,15 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
-from peakguard.config import load_portfolio
+from peakguard.config import load_alert_thresholds, load_portfolio
 from peakguard.errors import FetchError, GistError, NotificationError
 from peakguard.fetcher import fetch_history, fetch_price
 from peakguard.gist_client import read_gist, write_gist
 from peakguard.mdd_calc import (
+    calculate_bounce_from_bottom,
+    calculate_days_since_ath,
     calculate_drawdown,
+    calculate_price_zscore,
     check_threshold,
     get_rolling_ath,
     update_price_history,
@@ -23,10 +26,16 @@ from peakguard.mdd_calc import (
 from peakguard.notifier import (
     ATHData,
     AlertData,
+    BounceAlertData,
+    DaysSinceATHAlertData,
     FetchErrorData,
+    ZScoreAlertData,
     send_alert,
     send_ath_alert,
+    send_bounce_alert,
+    send_days_since_ath_alert,
     send_fetch_errors_alert,
+    send_zscore_alert,
 )
 from peakguard.storage import ClosingPrice, deserialize_history, serialize_history
 
@@ -89,6 +98,7 @@ def run() -> None:
         5. Save updated history back to Gist.
     """
     configs = load_portfolio(_CONFIG_PATH)
+    alert_limits = load_alert_thresholds(_CONFIG_PATH)
     history = _load_history_from_gist()
     fetch_errors: list[FetchErrorData] = []
 
@@ -174,6 +184,70 @@ def run() -> None:
                 logger.info("MDD alert: %s (drawdown: %.2f%%)", ticker, drawdown)
             except NotificationError as exc:
                 logger.warning("Failed to send alert for %s: %s", ticker, exc)
+
+        # --- Conditional metric alerts ---
+        # Find ATH entry for days-since-ath calculation
+        cutoff_metrics = reference_date - timedelta(days=_WINDOW_DAYS)
+        ath_entry_metrics = max(
+            (
+                cp
+                for cp in history[ticker]
+                if cutoff_metrics <= cp.date <= reference_date
+            ),
+            key=lambda cp: cp.price,
+        )
+
+        # 1. Days since ATH
+        days = calculate_days_since_ath(ath_entry_metrics.date, reference_date)
+        if days > alert_limits.days_since_ath_limit:
+            try:
+                send_days_since_ath_alert(
+                    DaysSinceATHAlertData(
+                        ticker=ticker,
+                        days=days,
+                        limit=alert_limits.days_since_ath_limit,
+                    )
+                )
+                logger.info("Days-since-ATH alert: %s (%d days)", ticker, days)
+            except NotificationError as exc:
+                logger.warning(
+                    "Failed to send days-since-ATH alert for %s: %s", ticker, exc
+                )
+
+        # 2. Price Z-score
+        try:
+            zscore = calculate_price_zscore(current_price, history[ticker])
+            if zscore < alert_limits.zscore_threshold:
+                try:
+                    send_zscore_alert(
+                        ZScoreAlertData(
+                            ticker=ticker,
+                            zscore=zscore,
+                            threshold=alert_limits.zscore_threshold,
+                        )
+                    )
+                    logger.info("Z-score alert: %s (zscore: %.4f)", ticker, zscore)
+                except NotificationError as exc:
+                    logger.warning(
+                        "Failed to send Z-score alert for %s: %s", ticker, exc
+                    )
+        except ValueError:
+            logger.debug("Cannot compute Z-score for %s: insufficient data", ticker)
+
+        # 3. Bounce from bottom
+        bounce = calculate_bounce_from_bottom(current_price, history[ticker])
+        if bounce >= alert_limits.bounce_from_bottom_min:
+            try:
+                send_bounce_alert(
+                    BounceAlertData(
+                        ticker=ticker,
+                        bounce_pct=bounce,
+                        min_pct=alert_limits.bounce_from_bottom_min,
+                    )
+                )
+                logger.info("Bounce alert: %s (bounce: %.2f%%)", ticker, bounce)
+            except NotificationError as exc:
+                logger.warning("Failed to send bounce alert for %s: %s", ticker, exc)
 
     try:
         send_fetch_errors_alert(fetch_errors)
