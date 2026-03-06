@@ -13,6 +13,7 @@ import statistics
 from peakguard.storage import ClosingPrice
 
 __all__ = [
+    "calculate_bounce_from_bottom",
     "calculate_days_since_ath",
     "calculate_drawdown",
     "calculate_price_zscore",
@@ -72,6 +73,31 @@ def calculate_price_zscore(
         raise ValueError("Standard deviation is zero — all prices are identical")
 
     return round((current_price - mean) / std, 4)
+
+
+def calculate_bounce_from_bottom(
+    current_price: float, history: list[ClosingPrice]
+) -> float:
+    """Calculate the percentage bounce from the 1-year low.
+
+    Measures how far the current price has recovered from the lowest
+    price in the history window, expressed as a percentage.
+
+    Args:
+        current_price: The latest close price.
+        history: A list of ClosingPrice records.
+
+    Returns:
+        The bounce percentage rounded to 2 decimal places.
+
+    Raises:
+        ValueError: If history is empty.
+    """
+    if not history:
+        raise ValueError("history must not be empty")
+
+    low = min(cp.price for cp in history)
+    return round((current_price - low) / low * 100, 2)
 
 
 def calculate_drawdown(current_price: float, peak_price: float) -> float:
