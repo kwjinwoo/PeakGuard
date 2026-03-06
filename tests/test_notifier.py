@@ -8,7 +8,13 @@ import pytest
 import requests
 
 from peakguard.errors import NotificationError
-from peakguard.notifier import ATHData, AlertData, send_alert, send_alerts, send_ath_alert
+from peakguard.notifier import (
+    ATHData,
+    AlertData,
+    send_alert,
+    send_alerts,
+    send_ath_alert,
+)
 
 
 class TestAlertData:

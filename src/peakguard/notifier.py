@@ -1,19 +1,20 @@
-"""Notifier module — sends MDD alerts via the Telegram Bot API.
+"""Notifier module — sends MDD and ATH alerts via the Telegram Bot API.
 
 This module is part of the External Services layer. It handles
 all interaction with the Telegram Bot API, converting AlertData
-objects into formatted messages sent to a configured chat.
+and ATHData objects into formatted messages sent to a configured chat.
 """
 
 import logging
 import os
 from dataclasses import dataclass
+from datetime import date
 
 import requests
 
 from peakguard.errors import NotificationError
 
-__all__ = ["AlertData", "send_alert", "send_alerts"]
+__all__ = ["ATHData", "AlertData", "send_alert", "send_alerts", "send_ath_alert"]
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,71 @@ def send_alert(alert: AlertData) -> None:
     token, chat_id = _get_telegram_config()
     url = _TELEGRAM_API_URL.format(token=token)
     message = _build_message(alert)
+
+    try:
+        response = requests.post(
+            url,
+            json={"chat_id": chat_id, "text": message},
+            timeout=_REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        raise NotificationError(message=str(exc)) from exc
+
+
+@dataclass(frozen=True)
+class ATHData:
+    """Immutable container for an all-time-high alert.
+
+    Attributes:
+        ticker: The ticker symbol (e.g., "AMZN").
+        new_peak: The new all-time high price.
+        peak_date: The date the new ATH was reached.
+
+    Raises:
+        ValueError: If ticker is empty or new_peak is not positive.
+    """
+
+    ticker: str
+    new_peak: float
+    peak_date: date
+
+    def __post_init__(self) -> None:
+        if not self.ticker or not self.ticker.strip():
+            raise ValueError("ticker must be a non-empty string")
+        if self.new_peak <= 0:
+            raise ValueError(f"new_peak must be positive, got {self.new_peak}")
+
+
+def _build_ath_message(data: ATHData) -> str:
+    """Build a human-readable Telegram ATH notification message.
+
+    Args:
+        data: The ATH data to format.
+
+    Returns:
+        A formatted message string.
+    """
+    return (
+        f"\U0001f3d4\ufe0f New ATH! {data.ticker}\n"
+        f"New Peak: {data.new_peak}\n"
+        f"Date: {data.peak_date}"
+    )
+
+
+def send_ath_alert(data: ATHData) -> None:
+    """Send a single ATH notification via Telegram.
+
+    Args:
+        data: The ATH data to send.
+
+    Raises:
+        ValueError: If Telegram environment variables are missing (programmer error).
+        NotificationError: If the Telegram API call fails (network/API error).
+    """
+    token, chat_id = _get_telegram_config()
+    url = _TELEGRAM_API_URL.format(token=token)
+    message = _build_ath_message(data)
 
     try:
         response = requests.post(
