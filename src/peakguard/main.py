@@ -13,7 +13,7 @@ from peakguard.errors import FetchError, GistError, NotificationError
 from peakguard.fetcher import fetch_price
 from peakguard.gist_client import read_gist, write_gist
 from peakguard.mdd_calc import calculate_drawdown, check_threshold, update_peak
-from peakguard.notifier import AlertData, send_alert
+from peakguard.notifier import ATHData, AlertData, send_alert, send_ath_alert
 from peakguard.storage import PeakRecord, deserialize_peaks, serialize_peaks
 
 __all__ = ["run"]
