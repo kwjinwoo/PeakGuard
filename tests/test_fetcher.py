@@ -132,6 +132,7 @@ class TestFetchPrice:
         with pytest.raises(FetchError) as exc_info:
             fetch_price("GOOG")
         assert exc_info.value.cause == FetchFailureCause.UNKNOWN
+
     """Tests for the fetch_prices function."""
 
     def test_returns_list_of_price_results(self, mocker) -> None:

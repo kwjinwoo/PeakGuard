@@ -9,9 +9,10 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 
+import requests
 import yfinance
 
-from peakguard.errors import FetchError
+from peakguard.errors import FetchError, FetchFailureCause
 
 __all__ = ["PriceResult", "fetch_price", "fetch_prices"]
 
@@ -60,10 +61,22 @@ def fetch_price(ticker: str) -> PriceResult:
         yf_ticker = yfinance.Ticker(ticker)
         history = yf_ticker.history(period="1d")
     except Exception as exc:
-        raise FetchError(ticker=ticker, message=str(exc)) from exc
+        cause = FetchFailureCause.UNKNOWN
+        if (
+            isinstance(exc, requests.exceptions.HTTPError)
+            and hasattr(exc, "response")
+            and exc.response is not None
+            and exc.response.status_code == 429
+        ):
+            cause = FetchFailureCause.RATE_LIMIT
+        raise FetchError(ticker=ticker, message=str(exc), cause=cause) from exc
 
     if history.empty:
-        raise FetchError(ticker=ticker, message="no price data returned")
+        raise FetchError(
+            ticker=ticker,
+            message="no price data returned",
+            cause=FetchFailureCause.EMPTY_DATA,
+        )
 
     last_row = history.iloc[-1]
     close_price: float = float(last_row["Close"])
