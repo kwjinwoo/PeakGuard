@@ -12,9 +12,17 @@ from datetime import date
 
 import requests
 
-from peakguard.errors import NotificationError
+from peakguard.errors import FetchFailureCause, NotificationError
 
-__all__ = ["ATHData", "AlertData", "send_alert", "send_alerts", "send_ath_alert"]
+__all__ = [
+    "ATHData",
+    "AlertData",
+    "FetchErrorData",
+    "send_alert",
+    "send_alerts",
+    "send_ath_alert",
+    "send_fetch_errors_alert",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -199,3 +207,87 @@ def send_alerts(alerts: list[AlertData]) -> list[AlertData]:
         except NotificationError as exc:
             logger.warning("Failed to send alert for %s: %s", alert.ticker, exc)
     return results
+
+
+@dataclass(frozen=True)
+class FetchErrorData:
+    """Immutable container for a fetch failure notification.
+
+    Attributes:
+        ticker: The ticker symbol that failed to fetch.
+        cause: The classified cause of the failure.
+        reason: A human-readable description of the failure.
+
+    Raises:
+        ValueError: If ticker is empty.
+    """
+
+    ticker: str
+    cause: FetchFailureCause
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.ticker or not self.ticker.strip():
+            raise ValueError("ticker must be a non-empty string")
+
+
+def _build_fetch_error_message(errors: list[FetchErrorData]) -> str:
+    """Build a human-readable Telegram message for batch fetch failures.
+
+    Groups errors by cause: rate-limit errors and other errors are
+    listed in separate sections for clarity.
+
+    Args:
+        errors: The list of fetch error data to format.
+
+    Returns:
+        A formatted message string.
+    """
+    rate_limit_errors = [e for e in errors if e.cause == FetchFailureCause.RATE_LIMIT]
+    other_errors = [e for e in errors if e.cause != FetchFailureCause.RATE_LIMIT]
+
+    parts: list[str] = []
+
+    if rate_limit_errors:
+        lines = ["\u26a0\ufe0f Fetch Failed (Rate Limit)"]
+        for err in rate_limit_errors:
+            lines.append(f"- {err.ticker}: {err.reason}")
+        parts.append("\n".join(lines))
+
+    if other_errors:
+        lines = ["\u274c Fetch Failed (Other)"]
+        for err in other_errors:
+            lines.append(f"- {err.ticker}: {err.reason}")
+        parts.append("\n".join(lines))
+
+    return "\n\n".join(parts)
+
+
+def send_fetch_errors_alert(errors: list[FetchErrorData]) -> None:
+    """Send a batch fetch-failure alert via Telegram.
+
+    If the error list is empty, no message is sent.
+
+    Args:
+        errors: The list of fetch error data to report.
+
+    Raises:
+        ValueError: If Telegram environment variables are missing.
+        NotificationError: If the Telegram API call fails.
+    """
+    if not errors:
+        return
+
+    token, chat_id = _get_telegram_config()
+    url = _TELEGRAM_API_URL.format(token=token)
+    message = _build_fetch_error_message(errors)
+
+    try:
+        response = requests.post(
+            url,
+            json={"chat_id": chat_id, "text": message},
+            timeout=_REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        raise NotificationError(message=str(exc)) from exc
