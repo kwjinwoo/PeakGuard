@@ -2,6 +2,7 @@
 
 from peakguard.errors import (
     FetchError,
+    FetchFailureCause,
     GistError,
     NotificationError,
     PeakGuardError,
@@ -45,8 +46,49 @@ class TestFetchError:
             with_caught = True
         assert with_caught
 
+    def test_default_cause_is_unknown(self) -> None:
+        """FetchError defaults cause to UNKNOWN when not specified."""
+        error = FetchError(ticker="AAPL", message="something failed")
+        assert error.cause == FetchFailureCause.UNKNOWN
 
-class TestNotificationError:
+    def test_accepts_rate_limit_cause(self) -> None:
+        """FetchError stores RATE_LIMIT cause when explicitly provided."""
+        error = FetchError(
+            ticker="AAPL",
+            message="429 Too Many Requests",
+            cause=FetchFailureCause.RATE_LIMIT,
+        )
+        assert error.cause == FetchFailureCause.RATE_LIMIT
+
+    def test_accepts_empty_data_cause(self) -> None:
+        """FetchError stores EMPTY_DATA cause when explicitly provided."""
+        error = FetchError(
+            ticker="AAPL",
+            message="no price data returned",
+            cause=FetchFailureCause.EMPTY_DATA,
+        )
+        assert error.cause == FetchFailureCause.EMPTY_DATA
+
+
+class TestFetchFailureCause:
+    """Tests for the FetchFailureCause enum."""
+
+    def test_has_rate_limit_value(self) -> None:
+        assert FetchFailureCause.RATE_LIMIT is not None
+
+    def test_has_empty_data_value(self) -> None:
+        assert FetchFailureCause.EMPTY_DATA is not None
+
+    def test_has_unknown_value(self) -> None:
+        assert FetchFailureCause.UNKNOWN is not None
+
+    def test_members_are_distinct(self) -> None:
+        causes = {
+            FetchFailureCause.RATE_LIMIT,
+            FetchFailureCause.EMPTY_DATA,
+            FetchFailureCause.UNKNOWN,
+        }
+        assert len(causes) == 3
     """Tests for the NotificationError exception."""
 
     def test_inherits_from_peakguard_error(self) -> None:
