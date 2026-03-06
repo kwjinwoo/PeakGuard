@@ -7,6 +7,7 @@ import pytest
 from peakguard.mdd_calc import (
     calculate_days_since_ath,
     calculate_drawdown,
+    calculate_price_zscore,
     check_threshold,
     get_rolling_ath,
     update_price_history,
@@ -327,3 +328,74 @@ class TestCalculateDaysSinceATH:
         future = date(2026, 3, 8)
         with pytest.raises(ValueError, match="ath_date"):
             calculate_days_since_ath(future, today)
+
+
+# ---------------------------------------------------------------------------
+# Price Z-score: calculate_price_zscore
+# ---------------------------------------------------------------------------
+
+
+class TestCalculatePriceZscore:
+    """Tests for the calculate_price_zscore function."""
+
+    @staticmethod
+    def _make_history(
+        ticker: str = "AAPL",
+        prices: list[float] | None = None,
+    ) -> list[ClosingPrice]:
+        if prices is None:
+            prices = [100.0, 110.0, 120.0, 130.0, 140.0]
+        base_date = date(2026, 1, 1)
+        return [
+            ClosingPrice(ticker=ticker, date=base_date + timedelta(days=i), price=p)
+            for i, p in enumerate(prices)
+        ]
+
+    def test_price_below_mean_returns_negative(self) -> None:
+        """Current price below the 1-year mean → negative Z-score."""
+        history = self._make_history(prices=[100.0, 110.0, 120.0, 130.0, 140.0])
+        # mean=120, stdev≈15.81
+        result = calculate_price_zscore(100.0, history)
+        assert result < 0
+
+    def test_price_above_mean_returns_positive(self) -> None:
+        """Current price above the 1-year mean → positive Z-score."""
+        history = self._make_history(prices=[100.0, 110.0, 120.0, 130.0, 140.0])
+        result = calculate_price_zscore(150.0, history)
+        assert result > 0
+
+    def test_price_at_mean_returns_zero(self) -> None:
+        """Current price equal to the mean → Z-score is 0.0."""
+        history = self._make_history(prices=[100.0, 110.0, 120.0, 130.0, 140.0])
+        result = calculate_price_zscore(120.0, history)
+        assert result == 0.0
+
+    def test_extreme_low_zscore(self) -> None:
+        """Severely depressed price produces Z-score below -2.0."""
+        history = self._make_history(prices=[100.0, 110.0, 120.0, 130.0, 140.0])
+        result = calculate_price_zscore(80.0, history)
+        assert result < -2.0
+
+    def test_result_is_rounded_to_four_decimals(self) -> None:
+        """Result is rounded to at most 4 decimal places."""
+        history = self._make_history(prices=[100.0, 110.0, 120.0, 130.0, 140.0])
+        result = calculate_price_zscore(115.0, history)
+        # Check it's a finite float with max 4 decimal digits
+        assert result == round(result, 4)
+
+    def test_raises_when_history_has_fewer_than_two_points(self) -> None:
+        """History with < 2 data points → ValueError."""
+        history = self._make_history(prices=[100.0])
+        with pytest.raises(ValueError, match="2"):
+            calculate_price_zscore(100.0, history)
+
+    def test_raises_when_history_is_empty(self) -> None:
+        """Empty history → ValueError."""
+        with pytest.raises(ValueError, match="2"):
+            calculate_price_zscore(100.0, [])
+
+    def test_raises_when_all_prices_identical(self) -> None:
+        """All identical prices (std=0) → ValueError."""
+        history = self._make_history(prices=[100.0, 100.0, 100.0])
+        with pytest.raises(ValueError, match="zero"):
+            calculate_price_zscore(100.0, history)
