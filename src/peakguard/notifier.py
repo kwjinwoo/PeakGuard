@@ -17,11 +17,17 @@ from peakguard.errors import FetchFailureCause, NotificationError
 __all__ = [
     "ATHData",
     "AlertData",
+    "BounceAlertData",
+    "DaysSinceATHAlertData",
     "FetchErrorData",
+    "ZScoreAlertData",
     "send_alert",
     "send_alerts",
     "send_ath_alert",
+    "send_bounce_alert",
+    "send_days_since_ath_alert",
     "send_fetch_errors_alert",
+    "send_zscore_alert",
 ]
 
 logger = logging.getLogger(__name__)
@@ -281,6 +287,192 @@ def send_fetch_errors_alert(errors: list[FetchErrorData]) -> None:
     token, chat_id = _get_telegram_config()
     url = _TELEGRAM_API_URL.format(token=token)
     message = _build_fetch_error_message(errors)
+
+    try:
+        response = requests.post(
+            url,
+            json={"chat_id": chat_id, "text": message},
+            timeout=_REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        raise NotificationError(message=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# DaysSinceATH alert
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DaysSinceATHAlertData:
+    """Immutable container for a days-since-ATH alert.
+
+    Attributes:
+        ticker: The ticker symbol.
+        days: Calendar days elapsed since ATH.
+        limit: The configured threshold in days.
+
+    Raises:
+        ValueError: If ticker is empty.
+    """
+
+    ticker: str
+    days: int
+    limit: int
+
+    def __post_init__(self) -> None:
+        if not self.ticker or not self.ticker.strip():
+            raise ValueError("ticker must be a non-empty string")
+
+
+def _build_days_since_ath_message(data: DaysSinceATHAlertData) -> str:
+    """Build Telegram message for a days-since-ATH alert."""
+    return (
+        f"\u23f8 ATH Stale: {data.ticker}\n"
+        f"Days Since ATH: {data.days}\n"
+        f"Limit: {data.limit}\n"
+        f"Consider slowing or pausing cash deployment."
+    )
+
+
+def send_days_since_ath_alert(data: DaysSinceATHAlertData) -> None:
+    """Send a days-since-ATH warning via Telegram.
+
+    Args:
+        data: The alert data to send.
+
+    Raises:
+        ValueError: If Telegram environment variables are missing.
+        NotificationError: If the Telegram API call fails.
+    """
+    token, chat_id = _get_telegram_config()
+    url = _TELEGRAM_API_URL.format(token=token)
+    message = _build_days_since_ath_message(data)
+
+    try:
+        response = requests.post(
+            url,
+            json={"chat_id": chat_id, "text": message},
+            timeout=_REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        raise NotificationError(message=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Z-score alert
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ZScoreAlertData:
+    """Immutable container for a Z-score oversold alert.
+
+    Attributes:
+        ticker: The ticker symbol.
+        zscore: The current price Z-score.
+        threshold: The configured Z-score threshold.
+
+    Raises:
+        ValueError: If ticker is empty.
+    """
+
+    ticker: str
+    zscore: float
+    threshold: float
+
+    def __post_init__(self) -> None:
+        if not self.ticker or not self.ticker.strip():
+            raise ValueError("ticker must be a non-empty string")
+
+
+def _build_zscore_message(data: ZScoreAlertData) -> str:
+    """Build Telegram message for a Z-score oversold alert."""
+    return (
+        f"\U0001f3af Oversold Signal: {data.ticker}\n"
+        f"Z-score: {data.zscore}\n"
+        f"Threshold: {data.threshold}\n"
+        f"Price is significantly below the 1-year average."
+    )
+
+
+def send_zscore_alert(data: ZScoreAlertData) -> None:
+    """Send a Z-score oversold alert via Telegram.
+
+    Args:
+        data: The alert data to send.
+
+    Raises:
+        ValueError: If Telegram environment variables are missing.
+        NotificationError: If the Telegram API call fails.
+    """
+    token, chat_id = _get_telegram_config()
+    url = _TELEGRAM_API_URL.format(token=token)
+    message = _build_zscore_message(data)
+
+    try:
+        response = requests.post(
+            url,
+            json={"chat_id": chat_id, "text": message},
+            timeout=_REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        raise NotificationError(message=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Bounce from bottom alert
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class BounceAlertData:
+    """Immutable container for a bounce-from-bottom alert.
+
+    Attributes:
+        ticker: The ticker symbol.
+        bounce_pct: Percentage bounce from the 1-year low.
+        min_pct: The configured minimum bounce threshold.
+
+    Raises:
+        ValueError: If ticker is empty.
+    """
+
+    ticker: str
+    bounce_pct: float
+    min_pct: float
+
+    def __post_init__(self) -> None:
+        if not self.ticker or not self.ticker.strip():
+            raise ValueError("ticker must be a non-empty string")
+
+
+def _build_bounce_message(data: BounceAlertData) -> str:
+    """Build Telegram message for a bounce-from-bottom alert."""
+    return (
+        f"\U0001f4c8 Bounce Signal: {data.ticker}\n"
+        f"Bounce from Low: +{data.bounce_pct}%\n"
+        f"Minimum Threshold: {data.min_pct}%\n"
+        f"Potential trend reversal detected."
+    )
+
+
+def send_bounce_alert(data: BounceAlertData) -> None:
+    """Send a bounce-from-bottom alert via Telegram.
+
+    Args:
+        data: The alert data to send.
+
+    Raises:
+        ValueError: If Telegram environment variables are missing.
+        NotificationError: If the Telegram API call fails.
+    """
+    token, chat_id = _get_telegram_config()
+    url = _TELEGRAM_API_URL.format(token=token)
+    message = _build_bounce_message(data)
 
     try:
         response = requests.post(
