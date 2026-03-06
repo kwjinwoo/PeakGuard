@@ -13,7 +13,14 @@ from peakguard.errors import FetchError, GistError, NotificationError
 from peakguard.fetcher import fetch_price
 from peakguard.gist_client import read_gist, write_gist
 from peakguard.mdd_calc import calculate_drawdown, check_threshold, update_peak
-from peakguard.notifier import ATHData, AlertData, send_alert, send_ath_alert
+from peakguard.notifier import (
+    ATHData,
+    AlertData,
+    FetchErrorData,
+    send_alert,
+    send_ath_alert,
+    send_fetch_errors_alert,
+)
 from peakguard.storage import PeakRecord, deserialize_peaks, serialize_peaks
 
 __all__ = ["run"]
@@ -71,12 +78,20 @@ def run() -> None:
     """
     configs = load_portfolio(_CONFIG_PATH)
     peaks = _load_peaks_from_gist()
+    fetch_errors: list[FetchErrorData] = []
 
     for cfg in configs:
         try:
             result = fetch_price(cfg.ticker)
         except FetchError as exc:
             logger.warning("Skipping %s: %s", cfg.ticker, exc)
+            fetch_errors.append(
+                FetchErrorData(
+                    ticker=cfg.ticker,
+                    cause=exc.cause,
+                    reason=str(exc),
+                )
+            )
             continue
 
         # Update or initialize peak record
@@ -131,6 +146,11 @@ def run() -> None:
                 )
             except NotificationError as exc:
                 logger.warning("Failed to send alert for %s: %s", cfg.ticker, exc)
+
+    try:
+        send_fetch_errors_alert(fetch_errors)
+    except NotificationError as exc:
+        logger.warning("Failed to send fetch error alert: %s", exc)
 
     _save_peaks_to_gist(peaks)
     logger.info("Peak records updated successfully")

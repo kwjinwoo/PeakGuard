@@ -36,6 +36,7 @@ class TestRun:
     """Tests for the run() orchestration function."""
 
     @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
     @patch("peakguard.main.send_ath_alert")
     @patch("peakguard.main.send_alert")
     @patch("peakguard.main.fetch_price")
@@ -48,6 +49,7 @@ class TestRun:
         mock_fetch_price: MagicMock,
         mock_send_alert: MagicMock,
         mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
         mock_write_gist: MagicMock,
         sample_configs: list[TickerConfig],
     ) -> None:
@@ -66,6 +68,7 @@ class TestRun:
         mock_write_gist.assert_called_once()
 
     @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
     @patch("peakguard.main.send_ath_alert")
     @patch("peakguard.main.send_alert")
     @patch("peakguard.main.fetch_price")
@@ -78,6 +81,7 @@ class TestRun:
         mock_fetch_price: MagicMock,
         mock_send_alert: MagicMock,
         mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
         mock_write_gist: MagicMock,
         sample_configs: list[TickerConfig],
     ) -> None:
@@ -99,6 +103,7 @@ class TestRun:
         mock_send_ath_alert.assert_not_called()
 
     @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
     @patch("peakguard.main.send_ath_alert")
     @patch("peakguard.main.send_alert")
     @patch("peakguard.main.fetch_price")
@@ -111,6 +116,7 @@ class TestRun:
         mock_fetch_price: MagicMock,
         mock_send_alert: MagicMock,
         mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
         mock_write_gist: MagicMock,
         sample_configs: list[TickerConfig],
     ) -> None:
@@ -130,6 +136,7 @@ class TestRun:
         assert "520.0" in written_json
 
     @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
     @patch("peakguard.main.send_ath_alert")
     @patch("peakguard.main.send_alert")
     @patch("peakguard.main.fetch_price")
@@ -142,6 +149,7 @@ class TestRun:
         mock_fetch_price: MagicMock,
         mock_send_alert: MagicMock,
         mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
         mock_write_gist: MagicMock,
         sample_configs: list[TickerConfig],
     ) -> None:
@@ -159,6 +167,7 @@ class TestRun:
         mock_write_gist.assert_called_once()
 
     @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
     @patch("peakguard.main.send_ath_alert")
     @patch("peakguard.main.send_alert")
     @patch("peakguard.main.fetch_price")
@@ -171,6 +180,7 @@ class TestRun:
         mock_fetch_price: MagicMock,
         mock_send_alert: MagicMock,
         mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
         mock_write_gist: MagicMock,
         sample_configs: list[TickerConfig],
     ) -> None:
@@ -193,6 +203,7 @@ class TestRun:
         assert "400.0" in written_json
 
     @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
     @patch("peakguard.main.send_ath_alert")
     @patch("peakguard.main.send_alert")
     @patch("peakguard.main.fetch_price")
@@ -205,6 +216,7 @@ class TestRun:
         mock_fetch_price: MagicMock,
         mock_send_alert: MagicMock,
         mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
         mock_write_gist: MagicMock,
         sample_configs: list[TickerConfig],
     ) -> None:
@@ -222,6 +234,7 @@ class TestRun:
         mock_write_gist.assert_called_once()
 
     @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
     @patch("peakguard.main.send_ath_alert")
     @patch("peakguard.main.send_alert")
     @patch("peakguard.main.fetch_price")
@@ -234,6 +247,7 @@ class TestRun:
         mock_fetch_price: MagicMock,
         mock_send_alert: MagicMock,
         mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
         mock_write_gist: MagicMock,
         sample_configs: list[TickerConfig],
     ) -> None:
@@ -255,6 +269,7 @@ class TestRun:
         mock_send_alert.assert_not_called()
 
     @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
     @patch("peakguard.main.send_ath_alert")
     @patch("peakguard.main.send_alert")
     @patch("peakguard.main.fetch_price")
@@ -267,6 +282,7 @@ class TestRun:
         mock_fetch_price: MagicMock,
         mock_send_alert: MagicMock,
         mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
         mock_write_gist: MagicMock,
         sample_configs: list[TickerConfig],
     ) -> None:
@@ -283,6 +299,7 @@ class TestRun:
         mock_send_ath_alert.assert_not_called()
 
     @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
     @patch("peakguard.main.send_ath_alert")
     @patch("peakguard.main.send_alert")
     @patch("peakguard.main.fetch_price")
@@ -295,6 +312,7 @@ class TestRun:
         mock_fetch_price: MagicMock,
         mock_send_alert: MagicMock,
         mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
         mock_write_gist: MagicMock,
     ) -> None:
         """New ticker not in peaks — send_ath_alert is called."""
@@ -315,6 +333,7 @@ class TestRun:
         assert ath_data.peak_date == date(2025, 6, 1)
 
     @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_fetch_errors_alert")
     @patch("peakguard.main.send_ath_alert")
     @patch("peakguard.main.send_alert")
     @patch("peakguard.main.fetch_price")
@@ -327,6 +346,7 @@ class TestRun:
         mock_fetch_price: MagicMock,
         mock_send_alert: MagicMock,
         mock_send_ath_alert: MagicMock,
+        mock_send_fetch_errors: MagicMock,
         mock_write_gist: MagicMock,
         sample_configs: list[TickerConfig],
     ) -> None:
@@ -448,9 +468,7 @@ class TestRunFetchErrorNotification:
             ),
             PriceResult(ticker="MSFT", price=390.0, fetched_at=date(2025, 6, 1)),
         ]
-        mock_send_fetch_errors.side_effect = NotificationError(
-            message="Telegram down"
-        )
+        mock_send_fetch_errors.side_effect = NotificationError(message="Telegram down")
 
         run()
 
