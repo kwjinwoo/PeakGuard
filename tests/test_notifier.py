@@ -16,6 +16,7 @@ from peakguard.notifier import (
     FetchErrorData,
     TickerSummary,
     ZScoreAlertData,
+    format_daily_summary,
     send_alert,
     send_alerts,
     send_ath_alert,
@@ -1107,3 +1108,285 @@ class TestTickerSummary:
         assert summary.days_since_ath is None
         assert summary.days_since_ath_limit is None
         assert summary.bounce_pct is None
+
+
+# ---------------------------------------------------------------------------
+# format_daily_summary
+# ---------------------------------------------------------------------------
+
+
+class TestFormatDailySummary:
+    """Tests for the format_daily_summary pure function."""
+
+    def test_header_contains_date(self) -> None:
+        """The summary header includes the report date."""
+        result = format_daily_summary([], date(2026, 3, 7))
+        assert "2026-03-07" in result
+
+    def test_header_contains_title(self) -> None:
+        """The summary header includes the PeakGuard title."""
+        result = format_daily_summary([], date(2026, 3, 7))
+        assert "PeakGuard" in result
+
+    def test_no_alerts_day_shows_all_clear_message(self) -> None:
+        """When no summaries have alerts, show an all-clear message."""
+        summaries = [
+            TickerSummary(
+                ticker="GOOGL",
+                name="Google",
+                current_price=190.0,
+                ath=200.0,
+                mdd_pct=5.0,
+                days_since_ath=10,
+                days_since_ath_limit=180,
+                bounce_pct=2.0,
+                mdd_alert=False,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+            ),
+        ]
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+        assert "이상 없음" in result
+
+    def test_empty_summaries_shows_all_clear(self) -> None:
+        """Empty list of summaries also shows all-clear."""
+        result = format_daily_summary([], date(2026, 3, 7))
+        assert "이상 없음" in result
+
+    def test_mdd_alert_ticker_shows_mdd_section(self) -> None:
+        """Ticker with MDD alert shows drawdown info."""
+        summaries = [
+            TickerSummary(
+                ticker="AMZN",
+                name="Amazon",
+                current_price=213.21,
+                ath=254.0,
+                mdd_pct=16.06,
+                days_since_ath=None,
+                days_since_ath_limit=None,
+                bounce_pct=None,
+                mdd_alert=True,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+            ),
+        ]
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+        assert "AMZN" in result
+        assert "Amazon" in result
+        assert "MDD" in result or "📉" in result
+        assert "$213.21" in result
+        assert "$254.00" in result
+        assert "-16.06%" in result
+
+    def test_bounce_alert_shows_bounce_info(self) -> None:
+        """Ticker with bounce alert shows bounce percentage."""
+        summaries = [
+            TickerSummary(
+                ticker="NVDA",
+                name="Nvidia",
+                current_price=150.0,
+                ath=200.0,
+                mdd_pct=25.0,
+                days_since_ath=100,
+                days_since_ath_limit=180,
+                bounce_pct=88.58,
+                mdd_alert=False,
+                ath_stale_alert=False,
+                bounce_alert=True,
+                ath_updated=False,
+            ),
+        ]
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+        assert "NVDA" in result
+        assert "+88.58%" in result
+        assert "반등" in result or "📈" in result
+
+    def test_ath_stale_alert_shows_days_info(self) -> None:
+        """Ticker with stale ATH shows days elapsed and limit."""
+        summaries = [
+            TickerSummary(
+                ticker="META",
+                name="Meta",
+                current_price=644.86,
+                ath=788.82,
+                mdd_pct=18.25,
+                days_since_ath=206,
+                days_since_ath_limit=180,
+                bounce_pct=None,
+                mdd_alert=True,
+                ath_stale_alert=True,
+                bounce_alert=False,
+                ath_updated=False,
+            ),
+        ]
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+        assert "META" in result
+        assert "206" in result
+        assert "180" in result
+
+    def test_ath_updated_shows_new_ath(self) -> None:
+        """Ticker with ATH update shows the new high marker."""
+        summaries = [
+            TickerSummary(
+                ticker="GOOGL",
+                name="Google",
+                current_price=210.0,
+                ath=210.0,
+                mdd_pct=None,
+                days_since_ath=None,
+                days_since_ath_limit=None,
+                bounce_pct=None,
+                mdd_alert=False,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=True,
+            ),
+        ]
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+        assert "GOOGL" in result
+        assert "ATH" in result
+
+    def test_combined_mdd_and_bounce_alert(self) -> None:
+        """Ticker with both MDD and bounce shows both status labels."""
+        summaries = [
+            TickerSummary(
+                ticker="AMZN",
+                name="Amazon",
+                current_price=213.21,
+                ath=254.0,
+                mdd_pct=16.06,
+                days_since_ath=100,
+                days_since_ath_limit=180,
+                bounce_pct=27.43,
+                mdd_alert=True,
+                ath_stale_alert=False,
+                bounce_alert=True,
+                ath_updated=False,
+            ),
+        ]
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+        assert "📉" in result
+        assert "📈" in result
+        assert "-16.06%" in result
+        assert "+27.43%" in result
+
+    def test_triple_alert_mdd_stale_bounce(self) -> None:
+        """Ticker with MDD, stale ATH, and bounce shows all three."""
+        summaries = [
+            TickerSummary(
+                ticker="META",
+                name="Meta",
+                current_price=644.86,
+                ath=788.82,
+                mdd_pct=18.25,
+                days_since_ath=206,
+                days_since_ath_limit=180,
+                bounce_pct=33.36,
+                mdd_alert=True,
+                ath_stale_alert=True,
+                bounce_alert=True,
+                ath_updated=False,
+            ),
+        ]
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+        assert "📉" in result
+        assert "⏸" in result
+        assert "📈" in result
+        assert "-18.25%" in result
+        assert "206" in result
+        assert "+33.36%" in result
+
+    def test_multiple_tickers_each_has_section(self) -> None:
+        """Multiple alert tickers each get their own section."""
+        summaries = [
+            TickerSummary(
+                ticker="AMZN",
+                name="Amazon",
+                current_price=213.21,
+                ath=254.0,
+                mdd_pct=16.06,
+                days_since_ath=None,
+                days_since_ath_limit=None,
+                bounce_pct=None,
+                mdd_alert=True,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+            ),
+            TickerSummary(
+                ticker="NVDA",
+                name="Nvidia",
+                current_price=150.0,
+                ath=200.0,
+                mdd_pct=None,
+                days_since_ath=None,
+                days_since_ath_limit=None,
+                bounce_pct=88.58,
+                mdd_alert=False,
+                ath_stale_alert=False,
+                bounce_alert=True,
+                ath_updated=False,
+            ),
+        ]
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+        assert "AMZN" in result
+        assert "NVDA" in result
+
+    def test_non_alert_tickers_excluded(self) -> None:
+        """Tickers with no alerts are not in the output body."""
+        summaries = [
+            TickerSummary(
+                ticker="AMZN",
+                name="Amazon",
+                current_price=213.21,
+                ath=254.0,
+                mdd_pct=16.06,
+                days_since_ath=None,
+                days_since_ath_limit=None,
+                bounce_pct=None,
+                mdd_alert=True,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+            ),
+            TickerSummary(
+                ticker="GOOGL",
+                name="Google",
+                current_price=190.0,
+                ath=200.0,
+                mdd_pct=5.0,
+                days_since_ath=10,
+                days_since_ath_limit=180,
+                bounce_pct=1.0,
+                mdd_alert=False,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+            ),
+        ]
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+        assert "AMZN" in result
+        # GOOGL section should not appear as it has no alerts
+        # But GOOGL might appear in a summary count — check no section header
+        lines = result.split("\n")
+        googl_section_lines = [
+            line for line in lines if "GOOGL" in line and "Google" in line
+        ]
+        assert len(googl_section_lines) == 0
+
+    def test_fetch_errors_section_appears(self) -> None:
+        """Fetch errors are included in the summary when provided."""
+        from peakguard.notifier import FetchErrorData
+
+        errors = [
+            FetchErrorData(
+                ticker="TSLA",
+                cause=FetchFailureCause.RATE_LIMIT,
+                reason="429 Too Many Requests",
+            ),
+        ]
+        result = format_daily_summary([], date(2026, 3, 7), fetch_errors=errors)
+        assert "TSLA" in result
+        assert "429" in result or "Rate Limit" in result

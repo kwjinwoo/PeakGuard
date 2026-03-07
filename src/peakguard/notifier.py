@@ -22,6 +22,7 @@ __all__ = [
     "FetchErrorData",
     "TickerSummary",
     "ZScoreAlertData",
+    "format_daily_summary",
     "send_alert",
     "send_alerts",
     "send_ath_alert",
@@ -87,6 +88,96 @@ class TickerSummary:
             or self.bounce_alert
             or self.ath_updated
         )
+
+
+def _format_ticker_section(summary: TickerSummary) -> str:
+    """Build the message section for a single ticker with active alerts.
+
+    Args:
+        summary: The ticker's aggregated daily metrics.
+
+    Returns:
+        A formatted string block for this ticker.
+    """
+    # Status line
+    status_parts: list[str] = []
+    if summary.mdd_alert:
+        status_parts.append("📉 MDD 경고")
+    if summary.ath_stale_alert:
+        status_parts.append("⏸ ATH 지연")
+    if summary.bounce_alert:
+        status_parts.append("📈 반등 신호")
+    if summary.ath_updated:
+        status_parts.append("🏔 ATH 갱신")
+
+    lines: list[str] = []
+    lines.append(f"{summary.ticker} ({summary.name})")
+    lines.append(f"상태: {' '.join(status_parts)}")
+
+    # Price / ATH line
+    lines.append(
+        f"현재가 / 최고가(ATH): ${summary.current_price:,.2f} / ${summary.ath:,.2f}"
+    )
+
+    # MDD line
+    if summary.mdd_pct is not None and summary.mdd_alert:
+        lines.append(f"고점 대비 하락률(MDD): -{summary.mdd_pct:.2f}%")
+
+    # ATH stale line
+    if (
+        summary.ath_stale_alert
+        and summary.days_since_ath is not None
+        and summary.days_since_ath_limit is not None
+    ):
+        lines.append(
+            f"ATH 갱신 지연: {summary.days_since_ath}일 "
+            f"(제한 기준 {summary.days_since_ath_limit}일 초과 - 현금 투입 조절 고려)"
+        )
+
+    # Bounce line
+    if summary.bounce_pct is not None and summary.bounce_alert:
+        lines.append(f"저점 대비 반등률: +{summary.bounce_pct:.2f}% (추세 반전 감지)")
+
+    return "\n".join(lines)
+
+
+def format_daily_summary(
+    summaries: list[TickerSummary],
+    report_date: date,
+    *,
+    fetch_errors: list["FetchErrorData"] | None = None,
+) -> str:
+    """Build the consolidated daily summary message.
+
+    Pure function — no I/O. Only tickers with active alerts are included.
+    If no alerts are active, an all-clear message is produced.
+
+    Args:
+        summaries: Per-ticker aggregated metrics for the day.
+        report_date: The date of the report.
+        fetch_errors: Optional list of fetch errors to append.
+
+    Returns:
+        A formatted summary string ready to send via Telegram.
+    """
+    header = f"📊 PeakGuard Daily Report — {report_date}"
+    parts: list[str] = [header, ""]
+
+    alert_summaries = [s for s in summaries if s.has_alert]
+
+    if not alert_summaries:
+        parts.append("✅ 모든 티커 이상 없음")
+    else:
+        for i, summary in enumerate(alert_summaries):
+            if i > 0:
+                parts.append("")
+            parts.append(_format_ticker_section(summary))
+
+    if fetch_errors:
+        parts.append("")
+        parts.append(_build_fetch_error_message(fetch_errors))
+
+    return "\n".join(parts)
 
 
 @dataclass(frozen=True)
