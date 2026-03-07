@@ -1,4 +1,4 @@
-"""Tests for main module — rolling window ATH orchestration logic."""
+"""Tests for main module — consolidated daily summary orchestration."""
 
 from datetime import date
 from unittest.mock import MagicMock, patch
@@ -8,15 +8,7 @@ import pytest
 from peakguard.config import AlertThresholds, TickerConfig
 from peakguard.errors import FetchError, FetchFailureCause, GistError, NotificationError
 from peakguard.fetcher import PriceResult
-from peakguard.main import run
-from peakguard.notifier import (
-    ATHData,
-    AlertData,
-    BounceAlertData,
-    DaysSinceATHAlertData,
-    FetchErrorData,
-    ZScoreAlertData,
-)
+from peakguard.notifier import FetchErrorData, TickerSummary
 from peakguard.storage import ClosingPrice
 
 
@@ -57,599 +49,6 @@ _EXPIRY_HISTORY_CSV = (
 )
 
 
-class TestRun:
-    """Tests for the run() orchestration function with rolling window ATH."""
-
-    @pytest.fixture(autouse=True)
-    def _mock_metric_alerts(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Mock metric alert functions and load_alert_thresholds for all tests."""
-        import peakguard.main as main_mod
-
-        monkeypatch.setattr(
-            main_mod,
-            "load_alert_thresholds",
-            lambda _: AlertThresholds(
-                days_since_ath_limit=180,
-                zscore_threshold=-2.0,
-                bounce_from_bottom_min=3.0,
-            ),
-        )
-        monkeypatch.setattr(main_mod, "send_days_since_ath_alert", MagicMock())
-        monkeypatch.setattr(main_mod, "send_zscore_alert", MagicMock())
-        monkeypatch.setattr(main_mod, "send_bounce_alert", MagicMock())
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_happy_path_no_alert(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """Price drops but stays above threshold — no alerts sent."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.return_value = _HISTORY_CSV
-        mock_fetch_price.side_effect = [
-            PriceResult(ticker="AMZN", price=470.0, fetched_at=date(2026, 3, 6)),
-            PriceResult(ticker="MSFT", price=385.0, fetched_at=date(2026, 3, 6)),
-        ]
-
-        run()
-
-        mock_fetch_history.assert_not_called()
-        mock_send_alert.assert_not_called()
-        mock_send_ath_alert.assert_not_called()
-        mock_write_gist.assert_called_once()
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_threshold_breach_sends_alert(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """Price drops beyond threshold — MDD alert is sent."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.return_value = _HISTORY_CSV
-        # AMZN: 440/500 = 12% drawdown (breaches 10%), MSFT: 385/400 = 3.75%
-        mock_fetch_price.side_effect = [
-            PriceResult(ticker="AMZN", price=440.0, fetched_at=date(2026, 3, 6)),
-            PriceResult(ticker="MSFT", price=385.0, fetched_at=date(2026, 3, 6)),
-        ]
-
-        run()
-
-        mock_send_alert.assert_called_once()
-        alert: AlertData = mock_send_alert.call_args[0][0]
-        assert alert.ticker == "AMZN"
-        assert alert.drawdown_pct == 12.0
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_new_ath_sends_ath_alert(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """Price exceeds rolling ATH — ATH alert sent, no MDD alert."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.return_value = _HISTORY_CSV
-        mock_fetch_price.side_effect = [
-            PriceResult(ticker="AMZN", price=520.0, fetched_at=date(2026, 3, 6)),
-            PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
-        ]
-
-        run()
-
-        mock_send_alert.assert_not_called()
-        mock_send_ath_alert.assert_called_once()
-        ath_data: ATHData = mock_send_ath_alert.call_args[0][0]
-        assert ath_data.ticker == "AMZN"
-        assert ath_data.new_peak == 520.0
-        assert ath_data.peak_date == date(2026, 3, 6)
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_no_ath_change_no_ath_alert(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """ATH stays the same — no ATH alert sent."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.return_value = _HISTORY_CSV
-        mock_fetch_price.side_effect = [
-            PriceResult(ticker="AMZN", price=470.0, fetched_at=date(2026, 3, 6)),
-            PriceResult(ticker="MSFT", price=385.0, fetched_at=date(2026, 3, 6)),
-        ]
-
-        run()
-
-        mock_send_ath_alert.assert_not_called()
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_ath_drops_due_to_window_expiry(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-    ) -> None:
-        """Old ATH expires from window — ATH drops, ATH alert sent."""
-        mock_load_portfolio.return_value = [
-            TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
-        ]
-        mock_read_gist.return_value = _EXPIRY_HISTORY_CSV
-        # Today 2026-03-06: the 600.0 entry at 2025-03-05 falls outside the
-        # 365-day window (cutoff becomes 2025-03-06), so ATH drops to 500.0
-        mock_fetch_price.return_value = PriceResult(
-            ticker="AMZN", price=490.0, fetched_at=date(2026, 3, 6)
-        )
-
-        run()
-
-        mock_send_ath_alert.assert_called_once()
-        ath_data: ATHData = mock_send_ath_alert.call_args[0][0]
-        assert ath_data.ticker == "AMZN"
-        assert ath_data.new_peak == 500.0
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_fetch_error_skips_ticker(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """One ticker fetch fails — others still processed."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.return_value = _HISTORY_CSV
-        mock_fetch_price.side_effect = [
-            FetchError(ticker="AMZN", message="network error"),
-            PriceResult(ticker="MSFT", price=385.0, fetched_at=date(2026, 3, 6)),
-        ]
-
-        run()
-
-        mock_write_gist.assert_called_once()
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_first_run_bootstrap(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """First run with empty gist — fetch_history called for all tickers."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.side_effect = GistError(
-            message="File 'peak_prices.csv' not found"
-        )
-        mock_fetch_history.side_effect = [
-            [
-                ClosingPrice(ticker="AMZN", date=date(2025, 6, 1), price=450.0),
-                ClosingPrice(ticker="AMZN", date=date(2025, 9, 1), price=500.0),
-                ClosingPrice(ticker="AMZN", date=date(2026, 3, 5), price=490.0),
-            ],
-            [
-                ClosingPrice(ticker="MSFT", date=date(2025, 6, 1), price=350.0),
-                ClosingPrice(ticker="MSFT", date=date(2025, 9, 1), price=400.0),
-                ClosingPrice(ticker="MSFT", date=date(2026, 3, 5), price=395.0),
-            ],
-        ]
-
-        run()
-
-        assert mock_fetch_history.call_count == 2
-        mock_fetch_price.assert_not_called()
-        # ATH alerts sent for both (initial ATH established)
-        assert mock_send_ath_alert.call_count == 2
-        mock_write_gist.assert_called_once()
-        written_csv = mock_write_gist.call_args[1]["content"]
-        assert "AMZN" in written_csv
-        assert "MSFT" in written_csv
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_new_ticker_bootstrap(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-    ) -> None:
-        """New ticker not in history — fetch_history for new, fetch_price for existing."""
-        mock_load_portfolio.return_value = [
-            TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
-            TickerConfig(ticker="TSLA", name="Tesla", threshold=10.0),
-        ]
-        mock_read_gist.return_value = _HISTORY_CSV  # has AMZN/MSFT, not TSLA
-        mock_fetch_price.return_value = PriceResult(
-            ticker="AMZN", price=490.0, fetched_at=date(2026, 3, 6)
-        )
-        mock_fetch_history.return_value = [
-            ClosingPrice(ticker="TSLA", date=date(2025, 9, 1), price=250.0),
-            ClosingPrice(ticker="TSLA", date=date(2026, 3, 5), price=300.0),
-        ]
-
-        run()
-
-        mock_fetch_history.assert_called_once_with("TSLA")
-        mock_fetch_price.assert_called_once_with("AMZN")
-        # TSLA is new → ATH alert sent
-        mock_send_ath_alert.assert_called_once()
-        ath_data: ATHData = mock_send_ath_alert.call_args[0][0]
-        assert ath_data.ticker == "TSLA"
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_notification_error_does_not_crash(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """Telegram MDD alert failure — logged but does not crash."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.return_value = _HISTORY_CSV
-        mock_fetch_price.side_effect = [
-            PriceResult(ticker="AMZN", price=440.0, fetched_at=date(2026, 3, 6)),
-            PriceResult(ticker="MSFT", price=385.0, fetched_at=date(2026, 3, 6)),
-        ]
-        mock_send_alert.side_effect = NotificationError(message="Telegram down")
-
-        run()
-
-        mock_write_gist.assert_called_once()
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_ath_alert_error_does_not_crash(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """ATH alert send failure — logged but does not crash."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.return_value = _HISTORY_CSV
-        mock_fetch_price.side_effect = [
-            PriceResult(ticker="AMZN", price=520.0, fetched_at=date(2026, 3, 6)),
-            PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
-        ]
-        mock_send_ath_alert.side_effect = NotificationError(message="Telegram down")
-
-        run()
-
-        mock_write_gist.assert_called_once()
-        written_csv = mock_write_gist.call_args[1]["content"]
-        assert "520.0" in written_csv
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_bootstrap_fetch_error_skips_ticker(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """Bootstrap fetch_history fails for one ticker — others still processed."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.side_effect = GistError(message="not found")
-        mock_fetch_history.side_effect = [
-            FetchError(ticker="AMZN", message="timeout"),
-            [
-                ClosingPrice(ticker="MSFT", date=date(2025, 9, 1), price=400.0),
-                ClosingPrice(ticker="MSFT", date=date(2026, 3, 5), price=395.0),
-            ],
-        ]
-
-        run()
-
-        mock_write_gist.assert_called_once()
-        written_csv = mock_write_gist.call_args[1]["content"]
-        assert "MSFT" in written_csv
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_history_saved_as_csv(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """Updated history is saved to gist as CSV."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.return_value = _HISTORY_CSV
-        mock_fetch_price.side_effect = [
-            PriceResult(ticker="AMZN", price=490.0, fetched_at=date(2026, 3, 6)),
-            PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
-        ]
-
-        run()
-
-        mock_write_gist.assert_called_once()
-        call_kwargs = mock_write_gist.call_args[1]
-        assert call_kwargs["filename"] == "peak_prices.csv"
-        csv_content = call_kwargs["content"]
-        assert csv_content.startswith("ticker,date,price\n")
-        # New entries appended
-        assert "2026-03-06" in csv_content
-
-
-class TestRunFetchErrorNotification:
-    """Tests for batch fetch-error notification in run()."""
-
-    @pytest.fixture(autouse=True)
-    def _mock_metric_alerts(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Mock metric alert functions and load_alert_thresholds for all tests."""
-        import peakguard.main as main_mod
-
-        monkeypatch.setattr(
-            main_mod,
-            "load_alert_thresholds",
-            lambda _: AlertThresholds(
-                days_since_ath_limit=180,
-                zscore_threshold=-2.0,
-                bounce_from_bottom_min=3.0,
-            ),
-        )
-        monkeypatch.setattr(main_mod, "send_days_since_ath_alert", MagicMock())
-        monkeypatch.setattr(main_mod, "send_zscore_alert", MagicMock())
-        monkeypatch.setattr(main_mod, "send_bounce_alert", MagicMock())
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_no_fetch_errors_sends_empty_list(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """All fetches succeed → send_fetch_errors_alert called with empty list."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.return_value = _HISTORY_CSV
-        mock_fetch_price.side_effect = [
-            PriceResult(ticker="AMZN", price=490.0, fetched_at=date(2026, 3, 6)),
-            PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
-        ]
-
-        run()
-
-        mock_send_fetch_errors.assert_called_once_with([])
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_fetch_errors_sends_batch_alert(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """Fetch fails → send_fetch_errors_alert called with error list."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.return_value = _HISTORY_CSV
-        mock_fetch_price.side_effect = [
-            FetchError(
-                ticker="AMZN",
-                message="429 Too Many Requests",
-                cause=FetchFailureCause.RATE_LIMIT,
-            ),
-            PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
-        ]
-
-        run()
-
-        mock_send_fetch_errors.assert_called_once()
-        errors = mock_send_fetch_errors.call_args[0][0]
-        assert len(errors) == 1
-        assert isinstance(errors[0], FetchErrorData)
-        assert errors[0].ticker == "AMZN"
-        assert errors[0].cause == FetchFailureCause.RATE_LIMIT
-
-    @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
-    @patch("peakguard.main.fetch_price")
-    @patch("peakguard.main.fetch_history")
-    @patch("peakguard.main.read_gist")
-    @patch("peakguard.main.load_portfolio")
-    def test_fetch_error_alert_failure_does_not_crash(
-        self,
-        mock_load_portfolio: MagicMock,
-        mock_read_gist: MagicMock,
-        mock_fetch_history: MagicMock,
-        mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_fetch_errors: MagicMock,
-        mock_write_gist: MagicMock,
-        sample_configs: list[TickerConfig],
-    ) -> None:
-        """send_fetch_errors_alert raises NotificationError → run does not crash."""
-        mock_load_portfolio.return_value = sample_configs
-        mock_read_gist.return_value = _HISTORY_CSV
-        mock_fetch_price.side_effect = [
-            FetchError(ticker="AMZN", message="error", cause=FetchFailureCause.UNKNOWN),
-            PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
-        ]
-        mock_send_fetch_errors.side_effect = NotificationError(message="Telegram down")
-
-        run()
-
-        mock_write_gist.assert_called_once()
-
-
 # History where AMZN ATH=500.0 at 2025-06-01 (>180 days before 2026-03-06)
 # and prices clearly decline, making Z-score and bounce metrics calculable.
 _METRICS_HISTORY_CSV = (
@@ -667,238 +66,834 @@ _METRICS_HISTORY_CSV = (
 )
 
 
-class TestRunMetricAlerts:
-    """Tests for the 3 conditional metric alerts in run()."""
+class TestRun:
+    """Tests for the run() orchestration with consolidated daily summary."""
 
     @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_bounce_alert")
-    @patch("peakguard.main.send_zscore_alert")
-    @patch("peakguard.main.send_days_since_ath_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
+    @patch("peakguard.main.send_daily_summary")
     @patch("peakguard.main.fetch_price")
     @patch("peakguard.main.fetch_history")
     @patch("peakguard.main.read_gist")
     @patch("peakguard.main.load_alert_thresholds")
     @patch("peakguard.main.load_portfolio")
-    def test_days_since_ath_alert_sent_when_threshold_exceeded(
+    def test_happy_path_no_alert(
         self,
         mock_load_portfolio: MagicMock,
         mock_load_thresholds: MagicMock,
         mock_read_gist: MagicMock,
         mock_fetch_history: MagicMock,
         mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_days: MagicMock,
-        mock_send_zscore: MagicMock,
-        mock_send_bounce: MagicMock,
-        mock_send_fetch_errors: MagicMock,
+        mock_send_summary: MagicMock,
         mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
     ) -> None:
-        """ATH is >180 days old → days_since_ath alert sent."""
-        mock_load_portfolio.return_value = [
-            TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
-        ]
+        """Price drops but stays above threshold — no alert flags set."""
+        mock_load_portfolio.return_value = sample_configs
         mock_load_thresholds.return_value = AlertThresholds(
-            days_since_ath_limit=180, zscore_threshold=-2.0, bounce_from_bottom_min=3.0
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
         )
-        mock_read_gist.return_value = _METRICS_HISTORY_CSV
-        # Price 390: drawdown from ATH 500 = 22% (>10% threshold)
-        mock_fetch_price.return_value = PriceResult(
-            ticker="AMZN", price=390.0, fetched_at=date(2026, 3, 6)
-        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        mock_fetch_price.side_effect = [
+            PriceResult(ticker="AMZN", price=470.0, fetched_at=date(2026, 3, 6)),
+            PriceResult(ticker="MSFT", price=385.0, fetched_at=date(2026, 3, 6)),
+        ]
+
+        from peakguard.main import run
 
         run()
 
-        mock_send_days.assert_called_once()
-        alert_data: DaysSinceATHAlertData = mock_send_days.call_args[0][0]
-        assert alert_data.ticker == "AMZN"
-        assert alert_data.days > 180
+        mock_fetch_history.assert_not_called()
+        mock_send_summary.assert_called_once()
+        summaries = mock_send_summary.call_args[0][0]
+        assert len(summaries) == 2
+        for s in summaries:
+            assert isinstance(s, TickerSummary)
+            assert s.mdd_alert is False
+            assert s.ath_updated is False
+        mock_write_gist.assert_called_once()
 
     @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_bounce_alert")
-    @patch("peakguard.main.send_zscore_alert")
-    @patch("peakguard.main.send_days_since_ath_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
+    @patch("peakguard.main.send_daily_summary")
     @patch("peakguard.main.fetch_price")
     @patch("peakguard.main.fetch_history")
     @patch("peakguard.main.read_gist")
     @patch("peakguard.main.load_alert_thresholds")
     @patch("peakguard.main.load_portfolio")
-    def test_zscore_alert_sent_when_below_threshold(
+    def test_threshold_breach_sets_mdd_alert(
         self,
         mock_load_portfolio: MagicMock,
         mock_load_thresholds: MagicMock,
         mock_read_gist: MagicMock,
         mock_fetch_history: MagicMock,
         mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_days: MagicMock,
-        mock_send_zscore: MagicMock,
-        mock_send_bounce: MagicMock,
-        mock_send_fetch_errors: MagicMock,
+        mock_send_summary: MagicMock,
         mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
     ) -> None:
-        """Z-score deeply negative → zscore alert sent."""
-        mock_load_portfolio.return_value = [
-            TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
-        ]
+        """Price drops beyond threshold — TickerSummary has mdd_alert=True."""
+        mock_load_portfolio.return_value = sample_configs
         mock_load_thresholds.return_value = AlertThresholds(
-            days_since_ath_limit=180, zscore_threshold=-2.0, bounce_from_bottom_min=3.0
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
         )
-        mock_read_gist.return_value = _METRICS_HISTORY_CSV
-        # Very low price to produce extreme negative Z-score
-        mock_fetch_price.return_value = PriceResult(
-            ticker="AMZN", price=300.0, fetched_at=date(2026, 3, 6)
-        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        # AMZN: 440/500 = 12% drawdown (breaches 10%), MSFT: 385/400 = 3.75%
+        mock_fetch_price.side_effect = [
+            PriceResult(ticker="AMZN", price=440.0, fetched_at=date(2026, 3, 6)),
+            PriceResult(ticker="MSFT", price=385.0, fetched_at=date(2026, 3, 6)),
+        ]
+
+        from peakguard.main import run
 
         run()
 
-        mock_send_zscore.assert_called_once()
-        alert_data: ZScoreAlertData = mock_send_zscore.call_args[0][0]
-        assert alert_data.ticker == "AMZN"
-        assert alert_data.zscore < -2.0
+        mock_send_summary.assert_called_once()
+        summaries = mock_send_summary.call_args[0][0]
+        amzn = next(s for s in summaries if s.ticker == "AMZN")
+        msft = next(s for s in summaries if s.ticker == "MSFT")
+        assert amzn.mdd_alert is True
+        assert amzn.mdd_pct == 12.0
+        assert msft.mdd_alert is False
 
     @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_bounce_alert")
-    @patch("peakguard.main.send_zscore_alert")
-    @patch("peakguard.main.send_days_since_ath_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
+    @patch("peakguard.main.send_daily_summary")
     @patch("peakguard.main.fetch_price")
     @patch("peakguard.main.fetch_history")
     @patch("peakguard.main.read_gist")
     @patch("peakguard.main.load_alert_thresholds")
     @patch("peakguard.main.load_portfolio")
-    def test_bounce_alert_sent_when_above_min(
+    def test_new_ath_sets_ath_updated(
         self,
         mock_load_portfolio: MagicMock,
         mock_load_thresholds: MagicMock,
         mock_read_gist: MagicMock,
         mock_fetch_history: MagicMock,
         mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_days: MagicMock,
-        mock_send_zscore: MagicMock,
-        mock_send_bounce: MagicMock,
-        mock_send_fetch_errors: MagicMock,
+        mock_send_summary: MagicMock,
         mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
     ) -> None:
-        """Bounce from low exceeds min_pct → bounce alert sent."""
-        mock_load_portfolio.return_value = [
-            TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
-        ]
+        """Price exceeds rolling ATH — TickerSummary has ath_updated=True."""
+        mock_load_portfolio.return_value = sample_configs
         mock_load_thresholds.return_value = AlertThresholds(
-            days_since_ath_limit=180, zscore_threshold=-2.0, bounce_from_bottom_min=3.0
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
         )
-        mock_read_gist.return_value = _METRICS_HISTORY_CSV
-        # Low in history is 380.0; price 400.0 → bounce = (400-380)/380*100 ≈ 5.26%
-        mock_fetch_price.return_value = PriceResult(
-            ticker="AMZN", price=400.0, fetched_at=date(2026, 3, 6)
-        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        mock_fetch_price.side_effect = [
+            PriceResult(ticker="AMZN", price=520.0, fetched_at=date(2026, 3, 6)),
+            PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
+        ]
+
+        from peakguard.main import run
 
         run()
 
-        mock_send_bounce.assert_called_once()
-        alert_data: BounceAlertData = mock_send_bounce.call_args[0][0]
-        assert alert_data.ticker == "AMZN"
-        assert alert_data.bounce_pct >= 3.0
+        mock_send_summary.assert_called_once()
+        summaries = mock_send_summary.call_args[0][0]
+        amzn = next(s for s in summaries if s.ticker == "AMZN")
+        assert amzn.ath_updated is True
+        assert amzn.ath == 520.0
+        # Price at/above ATH → no drawdown
+        assert amzn.mdd_pct is None
+        assert amzn.mdd_alert is False
 
     @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_bounce_alert")
-    @patch("peakguard.main.send_zscore_alert")
-    @patch("peakguard.main.send_days_since_ath_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
+    @patch("peakguard.main.send_daily_summary")
     @patch("peakguard.main.fetch_price")
     @patch("peakguard.main.fetch_history")
     @patch("peakguard.main.read_gist")
     @patch("peakguard.main.load_alert_thresholds")
     @patch("peakguard.main.load_portfolio")
-    def test_no_metric_alerts_when_conditions_not_met(
+    def test_no_ath_change_ath_updated_false(
         self,
         mock_load_portfolio: MagicMock,
         mock_load_thresholds: MagicMock,
         mock_read_gist: MagicMock,
         mock_fetch_history: MagicMock,
         mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_days: MagicMock,
-        mock_send_zscore: MagicMock,
-        mock_send_bounce: MagicMock,
-        mock_send_fetch_errors: MagicMock,
+        mock_send_summary: MagicMock,
         mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
     ) -> None:
-        """Price at ATH → no metric alerts fired (skip drawdown path)."""
-        mock_load_portfolio.return_value = [
-            TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
-        ]
+        """ATH stays the same — ath_updated is False."""
+        mock_load_portfolio.return_value = sample_configs
         mock_load_thresholds.return_value = AlertThresholds(
-            days_since_ath_limit=180, zscore_threshold=-2.0, bounce_from_bottom_min=3.0
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
         )
-        mock_read_gist.return_value = _METRICS_HISTORY_CSV
-        # Price at or above ATH → no drawdown → skip metric checks
-        mock_fetch_price.return_value = PriceResult(
-            ticker="AMZN", price=510.0, fetched_at=date(2026, 3, 6)
-        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        mock_fetch_price.side_effect = [
+            PriceResult(ticker="AMZN", price=470.0, fetched_at=date(2026, 3, 6)),
+            PriceResult(ticker="MSFT", price=385.0, fetched_at=date(2026, 3, 6)),
+        ]
+
+        from peakguard.main import run
 
         run()
 
-        mock_send_days.assert_not_called()
-        mock_send_zscore.assert_not_called()
-        mock_send_bounce.assert_not_called()
+        summaries = mock_send_summary.call_args[0][0]
+        for s in summaries:
+            assert s.ath_updated is False
 
     @patch("peakguard.main.write_gist")
-    @patch("peakguard.main.send_fetch_errors_alert")
-    @patch("peakguard.main.send_bounce_alert")
-    @patch("peakguard.main.send_zscore_alert")
-    @patch("peakguard.main.send_days_since_ath_alert")
-    @patch("peakguard.main.send_ath_alert")
-    @patch("peakguard.main.send_alert")
+    @patch("peakguard.main.send_daily_summary")
     @patch("peakguard.main.fetch_price")
     @patch("peakguard.main.fetch_history")
     @patch("peakguard.main.read_gist")
     @patch("peakguard.main.load_alert_thresholds")
     @patch("peakguard.main.load_portfolio")
-    def test_metric_alert_failure_does_not_crash(
+    def test_ath_drops_due_to_window_expiry(
         self,
         mock_load_portfolio: MagicMock,
         mock_load_thresholds: MagicMock,
         mock_read_gist: MagicMock,
         mock_fetch_history: MagicMock,
         mock_fetch_price: MagicMock,
-        mock_send_alert: MagicMock,
-        mock_send_ath_alert: MagicMock,
-        mock_send_days: MagicMock,
-        mock_send_zscore: MagicMock,
-        mock_send_bounce: MagicMock,
-        mock_send_fetch_errors: MagicMock,
+        mock_send_summary: MagicMock,
         mock_write_gist: MagicMock,
     ) -> None:
-        """Metric alert Telegram failure → logged but does not crash."""
+        """Old ATH expires from window — ATH drops, ath_updated stays False
+        (ATH dropped, not a new high)."""
         mock_load_portfolio.return_value = [
             TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
         ]
         mock_load_thresholds.return_value = AlertThresholds(
-            days_since_ath_limit=180, zscore_threshold=-2.0, bounce_from_bottom_min=3.0
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
         )
-        mock_read_gist.return_value = _METRICS_HISTORY_CSV
+        mock_read_gist.return_value = _EXPIRY_HISTORY_CSV
         mock_fetch_price.return_value = PriceResult(
-            ticker="AMZN", price=390.0, fetched_at=date(2026, 3, 6)
+            ticker="AMZN", price=490.0, fetched_at=date(2026, 3, 6)
         )
-        mock_send_days.side_effect = NotificationError(message="Telegram down")
-        mock_send_zscore.side_effect = NotificationError(message="Telegram down")
-        mock_send_bounce.side_effect = NotificationError(message="Telegram down")
+
+        from peakguard.main import run
+
+        run()
+
+        summaries = mock_send_summary.call_args[0][0]
+        amzn = summaries[0]
+        assert amzn.ath == 500.0
+        # ATH dropped from 600 to 500 — NOT a new high
+        assert amzn.ath_updated is False
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_fetch_error_skips_ticker(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
+    ) -> None:
+        """One ticker fetch fails — not included in summaries, error passed."""
+        mock_load_portfolio.return_value = sample_configs
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        mock_fetch_price.side_effect = [
+            FetchError(ticker="AMZN", message="network error"),
+            PriceResult(ticker="MSFT", price=385.0, fetched_at=date(2026, 3, 6)),
+        ]
+
+        from peakguard.main import run
+
+        run()
+
+        mock_send_summary.assert_called_once()
+        summaries = mock_send_summary.call_args[0][0]
+        assert len(summaries) == 1
+        assert summaries[0].ticker == "MSFT"
+        # Fetch errors passed via keyword argument
+        call_kwargs = mock_send_summary.call_args[1]
+        errors = call_kwargs.get("fetch_errors", [])
+        assert len(errors) == 1
+        assert errors[0].ticker == "AMZN"
+        mock_write_gist.assert_called_once()
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_first_run_bootstrap(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
+    ) -> None:
+        """First run with empty gist — fetch_history called, summaries built."""
+        mock_load_portfolio.return_value = sample_configs
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.side_effect = GistError(
+            message="File 'peak_prices.csv' not found"
+        )
+        mock_fetch_history.side_effect = [
+            [
+                ClosingPrice(ticker="AMZN", date=date(2025, 6, 1), price=450.0),
+                ClosingPrice(ticker="AMZN", date=date(2025, 9, 1), price=500.0),
+                ClosingPrice(ticker="AMZN", date=date(2026, 3, 5), price=490.0),
+            ],
+            [
+                ClosingPrice(ticker="MSFT", date=date(2025, 6, 1), price=350.0),
+                ClosingPrice(ticker="MSFT", date=date(2025, 9, 1), price=400.0),
+                ClosingPrice(ticker="MSFT", date=date(2026, 3, 5), price=395.0),
+            ],
+        ]
+
+        from peakguard.main import run
+
+        run()
+
+        assert mock_fetch_history.call_count == 2
+        mock_fetch_price.assert_not_called()
+        mock_send_summary.assert_called_once()
+        summaries = mock_send_summary.call_args[0][0]
+        assert len(summaries) == 2
+        tickers = {s.ticker for s in summaries}
+        assert tickers == {"AMZN", "MSFT"}
+        mock_write_gist.assert_called_once()
+        written_csv = mock_write_gist.call_args[1]["content"]
+        assert "AMZN" in written_csv
+        assert "MSFT" in written_csv
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_new_ticker_bootstrap(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+    ) -> None:
+        """New ticker not in history — fetch_history for new,
+        fetch_price for existing."""
+        mock_load_portfolio.return_value = [
+            TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
+            TickerConfig(ticker="TSLA", name="Tesla", threshold=10.0),
+        ]
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        mock_fetch_price.return_value = PriceResult(
+            ticker="AMZN", price=490.0, fetched_at=date(2026, 3, 6)
+        )
+        mock_fetch_history.return_value = [
+            ClosingPrice(ticker="TSLA", date=date(2025, 9, 1), price=250.0),
+            ClosingPrice(ticker="TSLA", date=date(2026, 3, 5), price=300.0),
+        ]
+
+        from peakguard.main import run
+
+        run()
+
+        mock_fetch_history.assert_called_once_with("TSLA")
+        mock_fetch_price.assert_called_once_with("AMZN")
+        mock_send_summary.assert_called_once()
+        summaries = mock_send_summary.call_args[0][0]
+        tickers = {s.ticker for s in summaries}
+        assert tickers == {"AMZN", "TSLA"}
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_notification_error_does_not_crash(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
+    ) -> None:
+        """send_daily_summary failure — logged but does not crash."""
+        mock_load_portfolio.return_value = sample_configs
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        mock_fetch_price.side_effect = [
+            PriceResult(ticker="AMZN", price=440.0, fetched_at=date(2026, 3, 6)),
+            PriceResult(ticker="MSFT", price=385.0, fetched_at=date(2026, 3, 6)),
+        ]
+        mock_send_summary.side_effect = NotificationError(message="Telegram down")
+
+        from peakguard.main import run
 
         run()
 
         mock_write_gist.assert_called_once()
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_bootstrap_fetch_error_skips_ticker(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
+    ) -> None:
+        """Bootstrap fetch_history fails for one ticker — others still processed."""
+        mock_load_portfolio.return_value = sample_configs
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.side_effect = GistError(message="not found")
+        mock_fetch_history.side_effect = [
+            FetchError(ticker="AMZN", message="timeout"),
+            [
+                ClosingPrice(ticker="MSFT", date=date(2025, 9, 1), price=400.0),
+                ClosingPrice(ticker="MSFT", date=date(2026, 3, 5), price=395.0),
+            ],
+        ]
+
+        from peakguard.main import run
+
+        run()
+
+        mock_write_gist.assert_called_once()
+        written_csv = mock_write_gist.call_args[1]["content"]
+        assert "MSFT" in written_csv
+        summaries = mock_send_summary.call_args[0][0]
+        assert len(summaries) == 1
+        assert summaries[0].ticker == "MSFT"
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_history_saved_as_csv(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
+    ) -> None:
+        """Updated history is saved to gist as CSV."""
+        mock_load_portfolio.return_value = sample_configs
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        mock_fetch_price.side_effect = [
+            PriceResult(ticker="AMZN", price=490.0, fetched_at=date(2026, 3, 6)),
+            PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
+        ]
+
+        from peakguard.main import run
+
+        run()
+
+        mock_write_gist.assert_called_once()
+        call_kwargs = mock_write_gist.call_args[1]
+        assert call_kwargs["filename"] == "peak_prices.csv"
+        csv_content = call_kwargs["content"]
+        assert csv_content.startswith("ticker,date,price\n")
+        assert "2026-03-06" in csv_content
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_report_date_passed_to_send_daily_summary(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
+    ) -> None:
+        """report_date is passed as the reference date from fetched prices."""
+        mock_load_portfolio.return_value = sample_configs
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        mock_fetch_price.side_effect = [
+            PriceResult(ticker="AMZN", price=490.0, fetched_at=date(2026, 3, 6)),
+            PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
+        ]
+
+        from peakguard.main import run
+
+        run()
+
+        report_date = mock_send_summary.call_args[0][1]
+        assert report_date == date(2026, 3, 6)
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_summary_contains_name_from_config(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
+    ) -> None:
+        """TickerSummary.name comes from TickerConfig.name."""
+        mock_load_portfolio.return_value = sample_configs
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        mock_fetch_price.side_effect = [
+            PriceResult(ticker="AMZN", price=490.0, fetched_at=date(2026, 3, 6)),
+            PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
+        ]
+
+        from peakguard.main import run
+
+        run()
+
+        summaries = mock_send_summary.call_args[0][0]
+        amzn = next(s for s in summaries if s.ticker == "AMZN")
+        msft = next(s for s in summaries if s.ticker == "MSFT")
+        assert amzn.name == "Amazon"
+        assert msft.name == "Microsoft"
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_price_at_ath_has_no_drawdown_metrics(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+    ) -> None:
+        """Price at ATH → mdd_pct, days_since_ath, bounce_pct are None."""
+        mock_load_portfolio.return_value = [
+            TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
+        ]
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        mock_fetch_price.return_value = PriceResult(
+            ticker="AMZN", price=500.0, fetched_at=date(2026, 3, 6)
+        )
+
+        from peakguard.main import run
+
+        run()
+
+        summaries = mock_send_summary.call_args[0][0]
+        amzn = summaries[0]
+        assert amzn.mdd_pct is None
+        assert amzn.days_since_ath is None
+        assert amzn.bounce_pct is None
+        assert amzn.mdd_alert is False
+        assert amzn.ath_stale_alert is False
+        assert amzn.bounce_alert is False
+
+
+class TestRunFetchErrorNotification:
+    """Tests for fetch error handling in consolidated summary."""
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_no_fetch_errors_passes_empty_list(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
+    ) -> None:
+        """All fetches succeed → fetch_errors is empty list."""
+        mock_load_portfolio.return_value = sample_configs
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        mock_fetch_price.side_effect = [
+            PriceResult(ticker="AMZN", price=490.0, fetched_at=date(2026, 3, 6)),
+            PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
+        ]
+
+        from peakguard.main import run
+
+        run()
+
+        call_kwargs = mock_send_summary.call_args[1]
+        assert call_kwargs.get("fetch_errors") == []
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_fetch_errors_passed_to_summary(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+        sample_configs: list[TickerConfig],
+    ) -> None:
+        """Fetch fails → error passed via fetch_errors kwarg."""
+        mock_load_portfolio.return_value = sample_configs
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = _HISTORY_CSV
+        mock_fetch_price.side_effect = [
+            FetchError(
+                ticker="AMZN",
+                message="429 Too Many Requests",
+                cause=FetchFailureCause.RATE_LIMIT,
+            ),
+            PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
+        ]
+
+        from peakguard.main import run
+
+        run()
+
+        call_kwargs = mock_send_summary.call_args[1]
+        errors = call_kwargs["fetch_errors"]
+        assert len(errors) == 1
+        assert isinstance(errors[0], FetchErrorData)
+        assert errors[0].ticker == "AMZN"
+        assert errors[0].cause == FetchFailureCause.RATE_LIMIT
+
+
+class TestRunMetricAlerts:
+    """Tests for metric alert flags in TickerSummary."""
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_days_since_ath_alert_flag_set(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+    ) -> None:
+        """ATH is >180 days old → ath_stale_alert is True."""
+        mock_load_portfolio.return_value = [
+            TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
+        ]
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = _METRICS_HISTORY_CSV
+        mock_fetch_price.return_value = PriceResult(
+            ticker="AMZN", price=390.0, fetched_at=date(2026, 3, 6)
+        )
+
+        from peakguard.main import run
+
+        run()
+
+        summaries = mock_send_summary.call_args[0][0]
+        amzn = summaries[0]
+        assert amzn.ath_stale_alert is True
+        assert amzn.days_since_ath is not None
+        assert amzn.days_since_ath > 180
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_bounce_alert_flag_set(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+    ) -> None:
+        """Bounce from low exceeds min_pct → bounce_alert is True."""
+        mock_load_portfolio.return_value = [
+            TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
+        ]
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = _METRICS_HISTORY_CSV
+        # Low in history is 380.0; price 400.0 → bounce ≈ 5.26%
+        mock_fetch_price.return_value = PriceResult(
+            ticker="AMZN", price=400.0, fetched_at=date(2026, 3, 6)
+        )
+
+        from peakguard.main import run
+
+        run()
+
+        summaries = mock_send_summary.call_args[0][0]
+        amzn = summaries[0]
+        assert amzn.bounce_alert is True
+        assert amzn.bounce_pct is not None
+        assert amzn.bounce_pct >= 3.0
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_no_metric_alerts_when_price_at_ath(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+    ) -> None:
+        """Price at ATH → no metric alert flags set."""
+        mock_load_portfolio.return_value = [
+            TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
+        ]
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = _METRICS_HISTORY_CSV
+        mock_fetch_price.return_value = PriceResult(
+            ticker="AMZN", price=510.0, fetched_at=date(2026, 3, 6)
+        )
+
+        from peakguard.main import run
+
+        run()
+
+        summaries = mock_send_summary.call_args[0][0]
+        amzn = summaries[0]
+        assert amzn.mdd_alert is False
+        assert amzn.ath_stale_alert is False
+        assert amzn.bounce_alert is False

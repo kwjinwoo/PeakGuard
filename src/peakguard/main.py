@@ -1,13 +1,13 @@
 """Main orchestration module — coordinates the daily MDD check pipeline.
 
 This module ties together all layers: loading configuration, fetching
-prices, calculating drawdowns, sending alerts, and persisting price
-history data using a rolling window ATH strategy.
+prices, calculating drawdowns, building per-ticker summaries, and
+sending a single consolidated daily Telegram report.
 """
 
 import logging
 import os
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 from peakguard.config import load_alert_thresholds, load_portfolio
@@ -18,24 +18,14 @@ from peakguard.mdd_calc import (
     calculate_bounce_from_bottom,
     calculate_days_since_ath,
     calculate_drawdown,
-    calculate_price_zscore,
     check_threshold,
     get_rolling_ath,
     update_price_history,
 )
 from peakguard.notifier import (
-    ATHData,
-    AlertData,
-    BounceAlertData,
-    DaysSinceATHAlertData,
     FetchErrorData,
-    ZScoreAlertData,
-    send_alert,
-    send_ath_alert,
-    send_bounce_alert,
-    send_days_since_ath_alert,
-    send_fetch_errors_alert,
-    send_zscore_alert,
+    TickerSummary,
+    send_daily_summary,
 )
 from peakguard.storage import ClosingPrice, deserialize_history, serialize_history
 
@@ -84,7 +74,7 @@ def _save_history_to_gist(records: dict[str, list[ClosingPrice]]) -> None:
 
 
 def run() -> None:
-    """Execute the daily MDD check pipeline with rolling window ATH.
+    """Execute the daily MDD check pipeline with consolidated summary.
 
     Steps:
         1. Load portfolio configuration from YAML.
@@ -92,15 +82,17 @@ def run() -> None:
         3. For each ticker:
            a. Bootstrap (fetch 1-year history) if no prior data exists.
            b. Otherwise fetch today's price and append to history.
-           c. Detect rolling ATH changes and send ATH alerts.
-           d. Calculate drawdown and send MDD alerts if threshold breached.
-        4. Send batch fetch error alerts.
+           c. Compute rolling ATH, drawdown, and metric alerts.
+           d. Build a TickerSummary for the consolidated report.
+        4. Send a single consolidated daily summary via Telegram.
         5. Save updated history back to Gist.
     """
     configs = load_portfolio(_CONFIG_PATH)
     alert_limits = load_alert_thresholds(_CONFIG_PATH)
     history = _load_history_from_gist()
     fetch_errors: list[FetchErrorData] = []
+    summaries: list[TickerSummary] = []
+    reference_date: date | None = None
 
     for cfg in configs:
         ticker = cfg.ticker
@@ -150,109 +142,75 @@ def run() -> None:
         # Compute new rolling ATH
         new_ath = get_rolling_ath(history[ticker], reference_date, _WINDOW_DAYS)
 
-        # ATH change detection (new high, window expiry, or bootstrap)
-        if old_ath is None or new_ath != old_ath:
+        # ATH change detection — only flag when ATH actually increased
+        ath_updated = old_ath is not None and new_ath > old_ath
+
+        # Build TickerSummary based on whether price is below ATH
+        if current_price >= new_ath:
+            summary = TickerSummary(
+                ticker=ticker,
+                name=cfg.name,
+                current_price=current_price,
+                ath=new_ath,
+                mdd_pct=None,
+                days_since_ath=None,
+                days_since_ath_limit=None,
+                bounce_pct=None,
+                mdd_alert=False,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=ath_updated,
+            )
+        else:
+            drawdown = calculate_drawdown(current_price, new_ath)
+            mdd_alert = check_threshold(drawdown, cfg.threshold)
+
+            # Find ATH entry for days-since-ath calculation
             cutoff = reference_date - timedelta(days=_WINDOW_DAYS)
             ath_entry = max(
                 (cp for cp in history[ticker] if cutoff <= cp.date <= reference_date),
                 key=lambda cp: cp.price,
             )
-            ath_data = ATHData(
-                ticker=ticker, new_peak=new_ath, peak_date=ath_entry.date
-            )
-            try:
-                send_ath_alert(ath_data)
-                logger.info("ATH alert: %s → %.2f", ticker, new_ath)
-            except NotificationError as exc:
-                logger.warning("Failed to send ATH alert for %s: %s", ticker, exc)
 
-        # Skip drawdown check if price is at or above ATH
-        if current_price >= new_ath:
-            continue
+            days = calculate_days_since_ath(ath_entry.date, reference_date)
+            ath_stale_alert = days > alert_limits.days_since_ath_limit
 
-        drawdown = calculate_drawdown(current_price, new_ath)
+            bounce = calculate_bounce_from_bottom(current_price, history[ticker])
+            bounce_alert = bounce >= alert_limits.bounce_from_bottom_min
 
-        if check_threshold(drawdown, cfg.threshold):
-            alert = AlertData(
+            summary = TickerSummary(
                 ticker=ticker,
+                name=cfg.name,
                 current_price=current_price,
-                peak_price=new_ath,
-                drawdown_pct=drawdown,
+                ath=new_ath,
+                mdd_pct=drawdown,
+                days_since_ath=days,
+                days_since_ath_limit=alert_limits.days_since_ath_limit,
+                bounce_pct=bounce,
+                mdd_alert=mdd_alert,
+                ath_stale_alert=ath_stale_alert,
+                bounce_alert=bounce_alert,
+                ath_updated=ath_updated,
             )
-            try:
-                send_alert(alert)
-                logger.info("MDD alert: %s (drawdown: %.2f%%)", ticker, drawdown)
-            except NotificationError as exc:
-                logger.warning("Failed to send alert for %s: %s", ticker, exc)
 
-        # --- Conditional metric alerts ---
-        # Find ATH entry for days-since-ath calculation
-        cutoff_metrics = reference_date - timedelta(days=_WINDOW_DAYS)
-        ath_entry_metrics = max(
-            (
-                cp
-                for cp in history[ticker]
-                if cutoff_metrics <= cp.date <= reference_date
-            ),
-            key=lambda cp: cp.price,
+        summaries.append(summary)
+        logger.info(
+            "Processed %s: price=%.2f, ATH=%.2f, alert=%s",
+            ticker,
+            current_price,
+            new_ath,
+            summary.has_alert,
         )
 
-        # 1. Days since ATH
-        days = calculate_days_since_ath(ath_entry_metrics.date, reference_date)
-        if days > alert_limits.days_since_ath_limit:
-            try:
-                send_days_since_ath_alert(
-                    DaysSinceATHAlertData(
-                        ticker=ticker,
-                        days=days,
-                        limit=alert_limits.days_since_ath_limit,
-                    )
-                )
-                logger.info("Days-since-ATH alert: %s (%d days)", ticker, days)
-            except NotificationError as exc:
-                logger.warning(
-                    "Failed to send days-since-ATH alert for %s: %s", ticker, exc
-                )
-
-        # 2. Price Z-score
-        try:
-            zscore = calculate_price_zscore(current_price, history[ticker])
-            if zscore < alert_limits.zscore_threshold:
-                try:
-                    send_zscore_alert(
-                        ZScoreAlertData(
-                            ticker=ticker,
-                            zscore=zscore,
-                            threshold=alert_limits.zscore_threshold,
-                        )
-                    )
-                    logger.info("Z-score alert: %s (zscore: %.4f)", ticker, zscore)
-                except NotificationError as exc:
-                    logger.warning(
-                        "Failed to send Z-score alert for %s: %s", ticker, exc
-                    )
-        except ValueError:
-            logger.debug("Cannot compute Z-score for %s: insufficient data", ticker)
-
-        # 3. Bounce from bottom
-        bounce = calculate_bounce_from_bottom(current_price, history[ticker])
-        if bounce >= alert_limits.bounce_from_bottom_min:
-            try:
-                send_bounce_alert(
-                    BounceAlertData(
-                        ticker=ticker,
-                        bounce_pct=bounce,
-                        min_pct=alert_limits.bounce_from_bottom_min,
-                    )
-                )
-                logger.info("Bounce alert: %s (bounce: %.2f%%)", ticker, bounce)
-            except NotificationError as exc:
-                logger.warning("Failed to send bounce alert for %s: %s", ticker, exc)
+    # Use the last reference_date, or today if all tickers failed
+    if reference_date is None:
+        reference_date = date.today()
 
     try:
-        send_fetch_errors_alert(fetch_errors)
+        send_daily_summary(summaries, reference_date, fetch_errors=fetch_errors)
+        logger.info("Daily summary sent successfully")
     except NotificationError as exc:
-        logger.warning("Failed to send fetch error alert: %s", exc)
+        logger.warning("Failed to send daily summary: %s", exc)
 
     _save_history_to_gist(history)
     logger.info("History records updated successfully")
