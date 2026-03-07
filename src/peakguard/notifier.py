@@ -20,6 +20,7 @@ __all__ = [
     "BounceAlertData",
     "DaysSinceATHAlertData",
     "FetchErrorData",
+    "TickerSummary",
     "ZScoreAlertData",
     "send_alert",
     "send_alerts",
@@ -34,6 +35,58 @@ logger = logging.getLogger(__name__)
 
 _TELEGRAM_API_URL = "https://api.telegram.org/bot{token}/sendMessage"
 _REQUEST_TIMEOUT_SECONDS = 10
+
+
+@dataclass(frozen=True)
+class TickerSummary:
+    """Immutable container aggregating all daily metrics for a single ticker.
+
+    Used to build the consolidated daily summary message.
+
+    Attributes:
+        ticker: The ticker symbol (e.g., "AMZN").
+        name: A human-readable name (e.g., "Amazon").
+        current_price: The latest close price.
+        ath: The rolling all-time high price.
+        mdd_pct: Drawdown percentage from ATH, or None if at/above ATH.
+        days_since_ath: Calendar days since ATH, or None if not applicable.
+        days_since_ath_limit: Configured stale-ATH limit in days, or None.
+        bounce_pct: Bounce percentage from 1-year low, or None.
+        mdd_alert: True if drawdown breached the configured threshold.
+        ath_stale_alert: True if days_since_ath exceeds the limit.
+        bounce_alert: True if bounce_pct exceeds the minimum threshold.
+        ath_updated: True if a new ATH was reached today.
+
+    Raises:
+        ValueError: If ticker is empty.
+    """
+
+    ticker: str
+    name: str
+    current_price: float
+    ath: float
+    mdd_pct: float | None
+    days_since_ath: int | None
+    days_since_ath_limit: int | None
+    bounce_pct: float | None
+    mdd_alert: bool
+    ath_stale_alert: bool
+    bounce_alert: bool
+    ath_updated: bool
+
+    def __post_init__(self) -> None:
+        if not self.ticker or not self.ticker.strip():
+            raise ValueError("ticker must be a non-empty string")
+
+    @property
+    def has_alert(self) -> bool:
+        """Return True if any alert condition is active."""
+        return (
+            self.mdd_alert
+            or self.ath_stale_alert
+            or self.bounce_alert
+            or self.ath_updated
+        )
 
 
 @dataclass(frozen=True)

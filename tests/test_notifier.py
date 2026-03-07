@@ -14,6 +14,7 @@ from peakguard.notifier import (
     BounceAlertData,
     DaysSinceATHAlertData,
     FetchErrorData,
+    TickerSummary,
     ZScoreAlertData,
     send_alert,
     send_alerts,
@@ -884,3 +885,225 @@ class TestSendBounceAlert:
             send_bounce_alert(
                 BounceAlertData(ticker="META", bounce_pct=5.0, min_pct=3.0)
             )
+
+
+# ---------------------------------------------------------------------------
+# TickerSummary dataclass
+# ---------------------------------------------------------------------------
+
+
+class TestTickerSummary:
+    """Tests for the TickerSummary dataclass."""
+
+    def test_creation_with_all_fields(self) -> None:
+        """Stores all fields correctly."""
+        summary = TickerSummary(
+            ticker="AMZN",
+            name="Amazon",
+            current_price=213.21,
+            ath=254.0,
+            mdd_pct=16.06,
+            days_since_ath=100,
+            days_since_ath_limit=180,
+            bounce_pct=27.43,
+            mdd_alert=True,
+            ath_stale_alert=False,
+            bounce_alert=True,
+            ath_updated=False,
+        )
+        assert summary.ticker == "AMZN"
+        assert summary.name == "Amazon"
+        assert summary.current_price == 213.21
+        assert summary.ath == 254.0
+        assert summary.mdd_pct == 16.06
+        assert summary.days_since_ath == 100
+        assert summary.days_since_ath_limit == 180
+        assert summary.bounce_pct == 27.43
+        assert summary.mdd_alert is True
+        assert summary.ath_stale_alert is False
+        assert summary.bounce_alert is True
+        assert summary.ath_updated is False
+
+    def test_is_frozen(self) -> None:
+        """TickerSummary instances are immutable."""
+        summary = TickerSummary(
+            ticker="AMZN",
+            name="Amazon",
+            current_price=213.21,
+            ath=254.0,
+            mdd_pct=16.06,
+            days_since_ath=None,
+            days_since_ath_limit=None,
+            bounce_pct=None,
+            mdd_alert=True,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+        )
+        with pytest.raises(AttributeError):
+            summary.ticker = "MSFT"  # type: ignore[misc]
+
+    def test_rejects_empty_ticker(self) -> None:
+        """Empty ticker is a programmer error → ValueError."""
+        with pytest.raises(ValueError, match="ticker"):
+            TickerSummary(
+                ticker="",
+                name="Amazon",
+                current_price=213.21,
+                ath=254.0,
+                mdd_pct=None,
+                days_since_ath=None,
+                days_since_ath_limit=None,
+                bounce_pct=None,
+                mdd_alert=False,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+            )
+
+    def test_rejects_whitespace_ticker(self) -> None:
+        """Whitespace-only ticker is a programmer error → ValueError."""
+        with pytest.raises(ValueError, match="ticker"):
+            TickerSummary(
+                ticker="   ",
+                name="Amazon",
+                current_price=213.21,
+                ath=254.0,
+                mdd_pct=None,
+                days_since_ath=None,
+                days_since_ath_limit=None,
+                bounce_pct=None,
+                mdd_alert=False,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+            )
+
+    def test_has_alert_true_when_mdd_alert(self) -> None:
+        """has_alert is True when mdd_alert is True."""
+        summary = TickerSummary(
+            ticker="AMZN",
+            name="Amazon",
+            current_price=213.21,
+            ath=254.0,
+            mdd_pct=16.06,
+            days_since_ath=None,
+            days_since_ath_limit=None,
+            bounce_pct=None,
+            mdd_alert=True,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+        )
+        assert summary.has_alert is True
+
+    def test_has_alert_true_when_ath_stale_alert(self) -> None:
+        """has_alert is True when ath_stale_alert is True."""
+        summary = TickerSummary(
+            ticker="META",
+            name="Meta",
+            current_price=644.86,
+            ath=788.82,
+            mdd_pct=18.25,
+            days_since_ath=206,
+            days_since_ath_limit=180,
+            bounce_pct=None,
+            mdd_alert=False,
+            ath_stale_alert=True,
+            bounce_alert=False,
+            ath_updated=False,
+        )
+        assert summary.has_alert is True
+
+    def test_has_alert_true_when_bounce_alert(self) -> None:
+        """has_alert is True when bounce_alert is True."""
+        summary = TickerSummary(
+            ticker="NVDA",
+            name="Nvidia",
+            current_price=150.0,
+            ath=200.0,
+            mdd_pct=None,
+            days_since_ath=None,
+            days_since_ath_limit=None,
+            bounce_pct=88.58,
+            mdd_alert=False,
+            ath_stale_alert=False,
+            bounce_alert=True,
+            ath_updated=False,
+        )
+        assert summary.has_alert is True
+
+    def test_has_alert_true_when_ath_updated(self) -> None:
+        """has_alert is True when ath_updated is True."""
+        summary = TickerSummary(
+            ticker="GOOGL",
+            name="Google",
+            current_price=200.0,
+            ath=200.0,
+            mdd_pct=None,
+            days_since_ath=None,
+            days_since_ath_limit=None,
+            bounce_pct=None,
+            mdd_alert=False,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=True,
+        )
+        assert summary.has_alert is True
+
+    def test_has_alert_false_when_no_alerts(self) -> None:
+        """has_alert is False when no alert flags are set."""
+        summary = TickerSummary(
+            ticker="GOOGL",
+            name="Google",
+            current_price=190.0,
+            ath=200.0,
+            mdd_pct=5.0,
+            days_since_ath=10,
+            days_since_ath_limit=180,
+            bounce_pct=2.0,
+            mdd_alert=False,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+        )
+        assert summary.has_alert is False
+
+    def test_has_alert_true_when_multiple_alerts(self) -> None:
+        """has_alert is True when multiple alert flags are set."""
+        summary = TickerSummary(
+            ticker="META",
+            name="Meta",
+            current_price=644.86,
+            ath=788.82,
+            mdd_pct=18.25,
+            days_since_ath=206,
+            days_since_ath_limit=180,
+            bounce_pct=33.36,
+            mdd_alert=True,
+            ath_stale_alert=True,
+            bounce_alert=True,
+            ath_updated=False,
+        )
+        assert summary.has_alert is True
+
+    def test_optional_fields_accept_none(self) -> None:
+        """Optional fields (mdd_pct, days_since_ath, etc.) accept None."""
+        summary = TickerSummary(
+            ticker="NVDA",
+            name="Nvidia",
+            current_price=150.0,
+            ath=150.0,
+            mdd_pct=None,
+            days_since_ath=None,
+            days_since_ath_limit=None,
+            bounce_pct=None,
+            mdd_alert=False,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+        )
+        assert summary.mdd_pct is None
+        assert summary.days_since_ath is None
+        assert summary.days_since_ath_limit is None
+        assert summary.bounce_pct is None
