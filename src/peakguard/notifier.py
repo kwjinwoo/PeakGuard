@@ -27,6 +27,7 @@ __all__ = [
     "send_alerts",
     "send_ath_alert",
     "send_bounce_alert",
+    "send_daily_summary",
     "send_days_since_ath_alert",
     "send_fetch_errors_alert",
     "send_zscore_alert",
@@ -178,6 +179,41 @@ def format_daily_summary(
         parts.append(_build_fetch_error_message(fetch_errors))
 
     return "\n".join(parts)
+
+
+def send_daily_summary(
+    summaries: list[TickerSummary],
+    report_date: date,
+    *,
+    fetch_errors: list["FetchErrorData"] | None = None,
+) -> None:
+    """Send the consolidated daily summary via Telegram.
+
+    Builds the summary message using format_daily_summary and sends it
+    as a single Telegram message.
+
+    Args:
+        summaries: Per-ticker aggregated metrics for the day.
+        report_date: The date of the report.
+        fetch_errors: Optional list of fetch errors to include.
+
+    Raises:
+        ValueError: If Telegram environment variables are missing.
+        NotificationError: If the Telegram API call fails.
+    """
+    token, chat_id = _get_telegram_config()
+    url = _TELEGRAM_API_URL.format(token=token)
+    message = format_daily_summary(summaries, report_date, fetch_errors=fetch_errors)
+
+    try:
+        response = requests.post(
+            url,
+            json={"chat_id": chat_id, "text": message},
+            timeout=_REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        raise NotificationError(message=str(exc)) from exc
 
 
 @dataclass(frozen=True)
