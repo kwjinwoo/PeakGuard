@@ -19,6 +19,16 @@ tickers:
     name: "Google"
     threshold: 15.0
 
+  # Korean ETFs (KRX)
+  "360750.KS":
+    name: "TIGER 미국S&P500"
+    threshold: 15.0
+    currency: KRW
+  "133690.KS":
+    name: "TIGER 미국나스닥100"
+    threshold: 15.0
+    currency: KRW
+
 # Global alert thresholds for conditional metric alerts
 alert_thresholds:
   days_since_ath_limit: 180
