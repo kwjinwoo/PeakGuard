@@ -160,6 +160,7 @@ def run() -> None:
                 ath_stale_alert=False,
                 bounce_alert=False,
                 ath_updated=ath_updated,
+                currency=cfg.currency,
             )
         else:
             drawdown = calculate_drawdown(current_price, new_ath)
@@ -191,6 +192,7 @@ def run() -> None:
                 ath_stale_alert=ath_stale_alert,
                 bounce_alert=bounce_alert,
                 ath_updated=ath_updated,
+                currency=cfg.currency,
             )
 
         summaries.append(summary)

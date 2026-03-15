@@ -897,3 +897,53 @@ class TestRunMetricAlerts:
         assert amzn.mdd_alert is False
         assert amzn.ath_stale_alert is False
         assert amzn.bounce_alert is False
+
+    @patch("peakguard.main.write_gist")
+    @patch("peakguard.main.send_daily_summary")
+    @patch("peakguard.main.fetch_price")
+    @patch("peakguard.main.fetch_history")
+    @patch("peakguard.main.read_gist")
+    @patch("peakguard.main.load_alert_thresholds")
+    @patch("peakguard.main.load_portfolio")
+    def test_krw_ticker_currency_propagated(
+        self,
+        mock_load_portfolio: MagicMock,
+        mock_load_thresholds: MagicMock,
+        mock_read_gist: MagicMock,
+        mock_fetch_history: MagicMock,
+        mock_fetch_price: MagicMock,
+        mock_send_summary: MagicMock,
+        mock_write_gist: MagicMock,
+    ) -> None:
+        """KRW currency from TickerConfig is propagated to TickerSummary."""
+        mock_load_portfolio.return_value = [
+            TickerConfig(
+                ticker="360750.KS",
+                name="TIGER 미국S&P500",
+                threshold=15.0,
+                currency="KRW",
+            ),
+        ]
+        mock_load_thresholds.return_value = AlertThresholds(
+            days_since_ath_limit=180,
+            zscore_threshold=-2.0,
+            bounce_from_bottom_min=3.0,
+        )
+        mock_read_gist.return_value = (
+            "ticker,date,price\n"
+            "360750.KS,2025-06-01,14000.0\n"
+            "360750.KS,2025-09-01,18000.0\n"
+            "360750.KS,2026-03-05,16500.0\n"
+        )
+        mock_fetch_price.return_value = PriceResult(
+            ticker="360750.KS", price=15280.0, fetched_at=date(2026, 3, 6)
+        )
+
+        from peakguard.main import run
+
+        run()
+
+        summaries = mock_send_summary.call_args[0][0]
+        tiger = summaries[0]
+        assert tiger.ticker == "360750.KS"
+        assert tiger.currency == "KRW"
