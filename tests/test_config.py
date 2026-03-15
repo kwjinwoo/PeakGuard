@@ -45,6 +45,21 @@ class TestTickerConfig:
         cfg = TickerConfig(ticker="SPY", name="Test", threshold=100.0)
         assert cfg.threshold == 100.0
 
+    def test_default_currency_is_usd(self) -> None:
+        """Currency defaults to USD when not specified."""
+        cfg = TickerConfig(ticker="SPY", name="S&P 500 ETF", threshold=10.0)
+        assert cfg.currency == "USD"
+
+    def test_custom_currency_krw(self) -> None:
+        """Currency can be set to KRW."""
+        cfg = TickerConfig(
+            ticker="360750.KS",
+            name="TIGER 미국S&P500",
+            threshold=15.0,
+            currency="KRW",
+        )
+        assert cfg.currency == "KRW"
+
 
 class TestLoadPortfolio:
     """Tests for load_portfolio YAML parsing."""
@@ -99,6 +114,36 @@ class TestLoadPortfolio:
 
         with pytest.raises(ValueError, match="name"):
             load_portfolio(config_file)
+
+    def test_load_ticker_with_currency(self, tmp_path: Path) -> None:
+        """YAML with explicit currency field is parsed correctly."""
+        yaml_content = (
+            "tickers:\n"
+            '  "360750.KS":\n'
+            '    name: "TIGER 미국S&P500"\n'
+            "    threshold: 15.0\n"
+            "    currency: KRW\n"
+        )
+        config_file = tmp_path / "portfolio.yaml"
+        config_file.write_text(yaml_content)
+
+        result = load_portfolio(config_file)
+
+        assert len(result) == 1
+        assert result[0].ticker == "360750.KS"
+        assert result[0].currency == "KRW"
+
+    def test_load_ticker_without_currency_defaults_usd(self, tmp_path: Path) -> None:
+        """YAML without currency field defaults to USD."""
+        yaml_content = (
+            "tickers:\n" "  AMZN:\n" '    name: "Amazon"\n' "    threshold: 15.0\n"
+        )
+        config_file = tmp_path / "portfolio.yaml"
+        config_file.write_text(yaml_content)
+
+        result = load_portfolio(config_file)
+
+        assert result[0].currency == "USD"
 
     def test_load_default_portfolio_yaml(self) -> None:
         """Integration: load the actual config/portfolio.yaml."""

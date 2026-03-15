@@ -20,6 +20,7 @@ class TickerConfig:
         ticker: The ticker symbol (e.g., "AAPL").
         name: A human-readable name for the asset.
         threshold: The MDD alert threshold percentage (0 < threshold <= 100).
+        currency: The currency code for price display (default: "USD").
 
     Raises:
         ValueError: If ticker is empty or threshold is out of range.
@@ -28,6 +29,7 @@ class TickerConfig:
     ticker: str
     name: str
     threshold: float
+    currency: str = "USD"
 
     def __post_init__(self) -> None:
         if not self.ticker or not self.ticker.strip():
@@ -111,6 +113,7 @@ def load_portfolio(path: Path) -> list[TickerConfig]:
                 ticker=ticker,
                 name=entry["name"],
                 threshold=float(entry["threshold"]),
+                currency=entry.get("currency", "USD"),
             )
         )
 

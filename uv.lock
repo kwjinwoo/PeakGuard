@@ -511,6 +511,8 @@ source = { editable = "." }
 dependencies = [
     { name = "commitizen" },
     { name = "pre-commit" },
+    { name = "pyyaml" },
+    { name = "requests" },
     { name = "yfinance" },
 ]
 
@@ -524,6 +526,8 @@ dev = [
 requires-dist = [
     { name = "commitizen", specifier = ">=4.13.9" },
     { name = "pre-commit", specifier = ">=4.5.1" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "requests", specifier = ">=2.31" },
     { name = "yfinance", specifier = ">=0.2.40" },
 ]
 
