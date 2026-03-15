@@ -245,6 +245,43 @@ class TestTickerSummary:
         )
         assert summary.has_alert is False
 
+    def test_default_currency_is_usd(self) -> None:
+        """Currency defaults to USD when not specified."""
+        summary = TickerSummary(
+            ticker="AMZN",
+            name="Amazon",
+            current_price=213.21,
+            ath=254.0,
+            mdd_pct=None,
+            days_since_ath=None,
+            days_since_ath_limit=None,
+            bounce_pct=None,
+            mdd_alert=False,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+        )
+        assert summary.currency == "USD"
+
+    def test_custom_currency_krw(self) -> None:
+        """Currency can be set to KRW."""
+        summary = TickerSummary(
+            ticker="360750.KS",
+            name="TIGER \ubbf8\uad6dS&P500",
+            current_price=15280.0,
+            ath=18000.0,
+            mdd_pct=None,
+            days_since_ath=None,
+            days_since_ath_limit=None,
+            bounce_pct=None,
+            mdd_alert=False,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+            currency="KRW",
+        )
+        assert summary.currency == "KRW"
+
     def test_has_alert_true_when_multiple_alerts(self) -> None:
         """has_alert is True when multiple alert flags are set."""
         summary = TickerSummary(
@@ -565,6 +602,52 @@ class TestFormatDailySummary:
         result = format_daily_summary([], date(2026, 3, 7), fetch_errors=errors)
         assert "TSLA" in result
         assert "429" in result or "Rate Limit" in result
+
+    def test_krw_ticker_shows_won_symbol(self) -> None:
+        """KRW ticker prices display with \u20a9 symbol and integer format."""
+        summaries = [
+            TickerSummary(
+                ticker="360750.KS",
+                name="TIGER \ubbf8\uad6dS&P500",
+                current_price=15280.0,
+                ath=18000.0,
+                mdd_pct=15.11,
+                days_since_ath=None,
+                days_since_ath_limit=None,
+                bounce_pct=None,
+                mdd_alert=True,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+                currency="KRW",
+            ),
+        ]
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+        assert "\u20a915,280" in result
+        assert "\u20a918,000" in result
+
+    def test_usd_ticker_shows_dollar_symbol(self) -> None:
+        """USD ticker prices display with $ symbol and 2 decimal places."""
+        summaries = [
+            TickerSummary(
+                ticker="AMZN",
+                name="Amazon",
+                current_price=213.21,
+                ath=254.0,
+                mdd_pct=16.06,
+                days_since_ath=None,
+                days_since_ath_limit=None,
+                bounce_pct=None,
+                mdd_alert=True,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+                currency="USD",
+            ),
+        ]
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+        assert "$213.21" in result
+        assert "$254.00" in result
 
 
 # ---------------------------------------------------------------------------

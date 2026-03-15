@@ -46,6 +46,7 @@ class TickerSummary:
         ath_stale_alert: True if days_since_ath exceeds the limit.
         bounce_alert: True if bounce_pct exceeds the minimum threshold.
         ath_updated: True if a new ATH was reached today.
+        currency: The currency code for price display (default: "USD").
 
     Raises:
         ValueError: If ticker is empty.
@@ -63,6 +64,7 @@ class TickerSummary:
     ath_stale_alert: bool
     bounce_alert: bool
     ath_updated: bool
+    currency: str = "USD"
 
     def __post_init__(self) -> None:
         if not self.ticker or not self.ticker.strip():
@@ -77,6 +79,21 @@ class TickerSummary:
             or self.bounce_alert
             or self.ath_updated
         )
+
+
+def _format_price(price: float, currency: str) -> str:
+    """Format a price value with the appropriate currency symbol.
+
+    Args:
+        price: The price value to format.
+        currency: The currency code (e.g., "USD", "KRW").
+
+    Returns:
+        A formatted price string with currency symbol.
+    """
+    if currency == "KRW":
+        return f"\u20a9{price:,.0f}"
+    return f"${price:,.2f}"
 
 
 def _format_ticker_section(summary: TickerSummary) -> str:
@@ -104,9 +121,9 @@ def _format_ticker_section(summary: TickerSummary) -> str:
     lines.append(f"상태: {' '.join(status_parts)}")
 
     # Price / ATH line
-    lines.append(
-        f"현재가 / 최고가(ATH): ${summary.current_price:,.2f} / ${summary.ath:,.2f}"
-    )
+    current = _format_price(summary.current_price, summary.currency)
+    ath = _format_price(summary.ath, summary.currency)
+    lines.append(f"현재가 / 최고가(ATH): {current} / {ath}")
 
     # MDD line
     if summary.mdd_pct is not None and summary.mdd_alert:
