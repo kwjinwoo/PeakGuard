@@ -11,6 +11,8 @@ Keep the product deliberately small: this is daily monitoring, not real-time ana
 - `src/peakguard/`: application package; see its local `AGENTS.md` for layer and module rules.
 - `tests/`: pytest suite; see its local `AGENTS.md` for TDD and mocking rules.
 - `config/`: portfolio and alert configuration; see its local `AGENTS.md` for the YAML contract.
+- `docs/`: human- and LLM-readable project wiki; start at `docs/README.md` and follow its local `AGENTS.md` when maintaining documentation.
+- `.agents/skills/peakguard-wiki/`: repository-local Wiki read/write skill. Use `$peakguard-wiki` whenever reading, creating, restructuring, or validating files under `docs/`.
 - `.github/workflows/`: scheduled production automation; see its local `AGENTS.md` for CI and secret-handling rules.
 - `src/main.py`: thin executable entry point. Keep business and integration logic in `peakguard` modules.
 

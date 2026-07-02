@@ -1,0 +1,4 @@
+interface:
+  display_name: "PeakGuard Wiki"
+  short_description: "Read, update, and validate the PeakGuard Wiki"
+  default_prompt: "Use $peakguard-wiki to read or update the project Wiki safely."

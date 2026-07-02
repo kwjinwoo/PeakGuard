@@ -2,6 +2,8 @@
 
 A zero-cost, serverless **Maximum Drawdown (MDD)** tracking tool.
 
+Project architecture, domain semantics, operations, and design decisions are documented in the [PeakGuard Wiki](docs/README.md).
+
 PeakGuard monitors a 1-year rolling All-Time High (ATH) for selected tech stocks and calculates
 the current drawdown. When user-defined thresholds are breached, it sends alerts via Telegram —
 all powered by GitHub Actions with no server required.
