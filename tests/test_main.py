@@ -432,6 +432,29 @@ class TestRun:
         mock_send_summary.assert_not_called()
         mock_write_gist.assert_not_called()
 
+    def test_malformed_csv_stops_before_evaluation_or_write(
+        self, mocker, sample_configs: list[TickerConfig]
+    ) -> None:
+        """Invalid persisted CSV is fatal and cannot be replaced automatically."""
+        mocker.patch("peakguard.main.load_portfolio", return_value=sample_configs)
+        mocker.patch("peakguard.main.load_alert_thresholds")
+        mocker.patch("peakguard.main.read_gist", return_value="wrong,header\n")
+        mock_fetch_history = mocker.patch("peakguard.main.fetch_history")
+        mock_fetch_price = mocker.patch("peakguard.main.fetch_price")
+        mock_send_summary = mocker.patch("peakguard.main.send_daily_summary")
+        mock_write_gist = mocker.patch("peakguard.main.write_gist")
+
+        from peakguard.main import run
+
+        with pytest.raises(GistError) as exc_info:
+            run()
+
+        assert exc_info.value.cause == GistFailureCause.MALFORMED_HISTORY
+        mock_fetch_history.assert_not_called()
+        mock_fetch_price.assert_not_called()
+        mock_send_summary.assert_not_called()
+        mock_write_gist.assert_not_called()
+
     @patch("peakguard.main.write_gist")
     @patch("peakguard.main.send_daily_summary")
     @patch("peakguard.main.fetch_price")

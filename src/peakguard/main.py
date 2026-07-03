@@ -64,7 +64,13 @@ def _load_history_from_gist() -> dict[str, list[ClosingPrice]]:
         logger.info("No existing history found in gist, starting fresh")
         return {}
 
-    return deserialize_history(content)
+    try:
+        return deserialize_history(content)
+    except (TypeError, ValueError) as exc:
+        raise GistError(
+            message="Gist history is malformed and cannot be loaded",
+            cause=GistFailureCause.MALFORMED_HISTORY,
+        ) from exc
 
 
 def _save_history_to_gist(records: dict[str, list[ClosingPrice]]) -> None:
