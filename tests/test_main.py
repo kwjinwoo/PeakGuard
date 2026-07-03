@@ -6,7 +6,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from peakguard.config import AlertThresholds, TickerConfig
-from peakguard.errors import FetchError, FetchFailureCause, GistError, NotificationError
+from peakguard.errors import (
+    FetchError,
+    FetchFailureCause,
+    GistError,
+    GistFailureCause,
+    NotificationError,
+)
 from peakguard.fetcher import PriceResult
 from peakguard.notifier import FetchErrorData, TickerSummary
 from peakguard.storage import ClosingPrice
@@ -355,7 +361,8 @@ class TestRun:
             bounce_from_bottom_min=3.0,
         )
         mock_read_gist.side_effect = GistError(
-            message="File 'peak_prices.csv' not found"
+            message="File 'peak_prices.csv' not found",
+            cause=GistFailureCause.MISSING_FILE,
         )
         mock_fetch_history.side_effect = [
             [
@@ -385,6 +392,45 @@ class TestRun:
         written_csv = mock_write_gist.call_args[1]["content"]
         assert "AMZN" in written_csv
         assert "MSFT" in written_csv
+
+    @pytest.mark.parametrize(
+        "cause",
+        [
+            GistFailureCause.AUTHENTICATION,
+            GistFailureCause.RATE_LIMIT,
+            GistFailureCause.NETWORK,
+            GistFailureCause.MALFORMED_RESPONSE,
+            GistFailureCause.UNKNOWN,
+        ],
+    )
+    def test_fatal_gist_read_failure_stops_before_evaluation_or_write(
+        self,
+        mocker,
+        sample_configs: list[TickerConfig],
+        cause: GistFailureCause,
+    ) -> None:
+        """Only a missing history file may enter the bootstrap pipeline."""
+        mocker.patch("peakguard.main.load_portfolio", return_value=sample_configs)
+        mocker.patch("peakguard.main.load_alert_thresholds")
+        mocker.patch(
+            "peakguard.main.read_gist",
+            side_effect=GistError(message="history unavailable", cause=cause),
+        )
+        mock_fetch_history = mocker.patch("peakguard.main.fetch_history")
+        mock_fetch_price = mocker.patch("peakguard.main.fetch_price")
+        mock_send_summary = mocker.patch("peakguard.main.send_daily_summary")
+        mock_write_gist = mocker.patch("peakguard.main.write_gist")
+
+        from peakguard.main import run
+
+        with pytest.raises(GistError) as exc_info:
+            run()
+
+        assert exc_info.value.cause == cause
+        mock_fetch_history.assert_not_called()
+        mock_fetch_price.assert_not_called()
+        mock_send_summary.assert_not_called()
+        mock_write_gist.assert_not_called()
 
     @patch("peakguard.main.write_gist")
     @patch("peakguard.main.send_daily_summary")
@@ -497,7 +543,9 @@ class TestRun:
             zscore_threshold=-2.0,
             bounce_from_bottom_min=3.0,
         )
-        mock_read_gist.side_effect = GistError(message="not found")
+        mock_read_gist.side_effect = GistError(
+            message="not found", cause=GistFailureCause.MISSING_FILE
+        )
         mock_fetch_history.side_effect = [
             FetchError(ticker="AMZN", message="timeout"),
             [

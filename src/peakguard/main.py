@@ -11,7 +11,12 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from peakguard.config import load_alert_thresholds, load_portfolio
-from peakguard.errors import FetchError, GistError, NotificationError
+from peakguard.errors import (
+    FetchError,
+    GistError,
+    GistFailureCause,
+    NotificationError,
+)
 from peakguard.fetcher import fetch_history, fetch_price
 from peakguard.gist_client import read_gist, write_gist
 from peakguard.mdd_calc import (
@@ -53,10 +58,13 @@ def _load_history_from_gist() -> dict[str, list[ClosingPrice]]:
 
     try:
         content = read_gist(gist_id=gist_id, filename=_GIST_FILENAME)
-        return deserialize_history(content)
-    except GistError:
+    except GistError as exc:
+        if exc.cause != GistFailureCause.MISSING_FILE:
+            raise
         logger.info("No existing history found in gist, starting fresh")
         return {}
+
+    return deserialize_history(content)
 
 
 def _save_history_to_gist(records: dict[str, list[ClosingPrice]]) -> None:
