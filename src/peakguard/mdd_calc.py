@@ -8,19 +8,69 @@ No I/O, no network calls, no file system access.
 """
 
 from datetime import date, timedelta
+from enum import Enum
 import statistics
 
 from peakguard.storage import ClosingPrice
 
 __all__ = [
+    "ReviewLevel",
     "calculate_bounce_from_bottom",
     "calculate_days_since_ath",
     "calculate_drawdown",
     "calculate_price_zscore",
     "check_threshold",
+    "derive_review_level",
     "get_rolling_ath",
     "update_price_history",
 ]
+
+
+class ReviewLevel(Enum):
+    """Investment-review state derived from existing price alert facts."""
+
+    NONE = "None"
+    WATCH = "Watch"
+    ATTRACTIVE = "Attractive"
+    DEEP_DISCOUNT = "Deep Discount"
+    THESIS_CHECK = "Thesis Check"
+    RECOVERY_WATCH = "Recovery Watch"
+
+
+def derive_review_level(
+    *,
+    mdd_alert: bool,
+    zscore_alert: bool,
+    bounce_alert: bool,
+    thesis_check_required: bool = False,
+) -> ReviewLevel:
+    """Derive one review level from alert booleans with explicit precedence.
+
+    Thesis review overrides price-derived levels. Joint MDD and Z-score
+    breaches are a deep discount; a Z-score-only breach is attractive; an
+    MDD-only breach is a watch. Bounce is used only when no discount input is
+    active, so a recovery signal cannot hide a discount condition.
+
+    Args:
+        mdd_alert: Whether drawdown meets the configured asset threshold.
+        zscore_alert: Whether Z-score meets the configured low-price threshold.
+        bounce_alert: Whether bounce meets the configured recovery threshold.
+        thesis_check_required: Explicit non-price policy input for thesis review.
+
+    Returns:
+        The highest-precedence review level for the supplied facts.
+    """
+    if thesis_check_required:
+        return ReviewLevel.THESIS_CHECK
+    if mdd_alert and zscore_alert:
+        return ReviewLevel.DEEP_DISCOUNT
+    if zscore_alert:
+        return ReviewLevel.ATTRACTIVE
+    if mdd_alert:
+        return ReviewLevel.WATCH
+    if bounce_alert:
+        return ReviewLevel.RECOVERY_WATCH
+    return ReviewLevel.NONE
 
 
 def calculate_days_since_ath(ath_date: date, today: date) -> int:

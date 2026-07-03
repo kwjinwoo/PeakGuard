@@ -5,11 +5,13 @@ from datetime import date, timedelta
 import pytest
 
 from peakguard.mdd_calc import (
+    ReviewLevel,
     calculate_bounce_from_bottom,
     calculate_days_since_ath,
     calculate_drawdown,
     calculate_price_zscore,
     check_threshold,
+    derive_review_level,
     get_rolling_ath,
     update_price_history,
 )
@@ -105,6 +107,48 @@ class TestCheckThreshold:
         """Threshold > 100 is invalid → ValueError."""
         with pytest.raises(ValueError, match="threshold"):
             check_threshold(drawdown_pct=5.0, threshold=101.0)
+
+
+class TestDeriveReviewLevel:
+    """Tests for deterministic review-level precedence."""
+
+    @pytest.mark.parametrize(
+        (
+            "mdd_alert",
+            "zscore_alert",
+            "bounce_alert",
+            "thesis_check_required",
+            "expected",
+        ),
+        [
+            (False, False, False, False, ReviewLevel.NONE),
+            (True, False, False, False, ReviewLevel.WATCH),
+            (False, True, False, False, ReviewLevel.ATTRACTIVE),
+            (True, True, False, False, ReviewLevel.DEEP_DISCOUNT),
+            (False, False, True, False, ReviewLevel.RECOVERY_WATCH),
+            (True, False, True, False, ReviewLevel.WATCH),
+            (False, True, True, False, ReviewLevel.ATTRACTIVE),
+            (True, True, True, False, ReviewLevel.DEEP_DISCOUNT),
+            (False, False, False, True, ReviewLevel.THESIS_CHECK),
+            (True, True, True, True, ReviewLevel.THESIS_CHECK),
+        ],
+    )
+    def test_decision_table(
+        self,
+        mdd_alert: bool,
+        zscore_alert: bool,
+        bounce_alert: bool,
+        thesis_check_required: bool,
+        expected: ReviewLevel,
+    ) -> None:
+        result = derive_review_level(
+            mdd_alert=mdd_alert,
+            zscore_alert=zscore_alert,
+            bounce_alert=bounce_alert,
+            thesis_check_required=thesis_check_required,
+        )
+
+        assert result == expected
 
 
 # ---------------------------------------------------------------------------
