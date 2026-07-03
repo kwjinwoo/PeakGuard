@@ -47,6 +47,7 @@ Rows are sorted by ticker and date. Local storage functions exist for developmen
 - Missing required environment variables are fatal validation errors.
 - Network requests use finite timeouts and typed integration errors.
 - Treat malformed persisted data as an operational incident; do not silently invent replacement history without confirming intended recovery behavior.
+- Bootstrap automatically only when `peak_prices.csv` is absent from an otherwise valid Gist response. All other Gist read or history-parse failures stop the run before evaluation and remote writes.
 
 ## Local commands
 

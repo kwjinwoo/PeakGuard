@@ -3,7 +3,7 @@ id: current-status
 title: Current Status
 type: status
 status: active
-last_verified: 2026-07-02
+last_verified: 2026-07-04
 verified_by:
   - uv run pytest -q
   - uv run pre-commit run --all-files
@@ -28,8 +28,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - The pipeline reads and writes `peak_prices.csv` in a GitHub Gist.
 - Portfolio and alert limits are loaded from `config/portfolio.yaml`.
 - Daily output is one consolidated Telegram message containing active alerts and fetch failures.
-- Tests: **228 passed** on 2026-07-02.
-- Pre-commit: all configured hooks passed on 2026-07-02.
+- Tests: **241 passed** on 2026-07-04.
+- Pre-commit: all configured hooks passed on 2026-07-04.
 
 ## Implemented capabilities
 
@@ -41,11 +41,11 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - CSV serialization and local development file I/O.
 - GitHub Gist persistence and Telegram delivery.
 - Graceful continuation when an individual ticker fetch fails.
+- Typed Gist failure categories with fail-closed history loading; only an explicitly missing `peak_prices.csv` triggers bootstrap.
 
 ## Known gaps and concerns
 
 - A Z-score threshold is configured and its calculation exists, but the daily orchestration does not currently add a Z-score signal to `TickerSummary` or the Telegram report. See [Phase 2](roadmap.md#phase-2--discount-signal-model).
-- `_load_history_from_gist()` treats every `GistError` as an empty first-run state. Authentication, rate-limit, and transient failures can therefore be indistinguishable from a missing history file. See [PROP-0001](proposals/PROP-0001-distinguish-gist-read-failures.md).
 - The README's current tracked-assets table lists only US equities while `portfolio.yaml` also contains Korean ETFs.
 
 ## Update rule

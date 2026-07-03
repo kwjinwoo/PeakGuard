@@ -2,9 +2,10 @@
 id: PROP-0001
 title: Distinguish Gist Read Failure Modes
 type: proposal
-status: proposed
+status: accepted
 created: 2026-07-02
 related:
+  - ../decisions/0002-fail-closed-on-gist-read-errors.md
   - ../runbooks/gist-history-read-failures.md
   - ../roadmap.md
 code:
@@ -16,22 +17,24 @@ code:
 
 ## Problem
 
-`_load_history_from_gist()` catches every `GistError` and returns an empty history. A missing Gist file is a valid bootstrap condition, but invalid credentials, rate limits, unavailable GitHub APIs, and malformed responses are not.
+Before this proposal was accepted, `_load_history_from_gist()` caught every `GistError` and returned an empty history. A missing Gist file is a valid bootstrap condition, but invalid credentials, rate limits, unavailable GitHub APIs, and malformed responses are not.
 
 Continuing with empty history after a transient failure can trigger unnecessary provider bootstrap calls and risks replacing valid remote history later in the run.
 
 ## Evidence
 
-- `gist_client.read_gist()` currently uses one `GistError` type for HTTP failures and missing files.
-- `peakguard.main._load_history_from_gist()` does not inspect the cause.
-- The existing log message says no history was found even when the actual cause may differ.
+- `gist_client.read_gist()` used one unclassified `GistError` for HTTP failures and missing files.
+- `peakguard.main._load_history_from_gist()` did not inspect the cause.
+- The log message said no history was found even when the actual cause differed.
 
 ## Candidate direction
 
 Represent a missing Gist file distinctly from transport, authentication, rate-limit, and response-shape errors. Bootstrap only for the missing-file case; fail the run before mutation for other read failures.
 
-## Open questions
+## Resolution
 
-- Should a missing target Gist be distinct from a missing file inside an existing Gist?
-- Should retry behavior remain the responsibility of GitHub Actions or be implemented in the HTTP client?
-- Should malformed CSV be treated as a fatal persistence error without attempting a write?
+Accepted by [ADR-0002](../decisions/0002-fail-closed-on-gist-read-errors.md):
+
+- A missing or inaccessible Gist is distinct from a missing file inside an existing Gist.
+- Retry behavior remains the responsibility of GitHub Actions.
+- Malformed CSV is fatal and cannot be followed by signal evaluation or a write.

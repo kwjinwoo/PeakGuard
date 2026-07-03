@@ -5,6 +5,7 @@ type: index
 status: active
 related:
   - 0001-csv-gist-persistence.md
+  - 0002-fail-closed-on-gist-read-errors.md
   - ../proposals/README.md
 ---
 
@@ -15,6 +16,7 @@ Architecture Decision Records (ADRs) preserve the rationale for choices that con
 ## Index
 
 - [ADR-0001: Persist rolling history as CSV in a GitHub Gist](0001-csv-gist-persistence.md)
+- [ADR-0002: Fail closed on Gist history read errors](0002-fail-closed-on-gist-read-errors.md)
 
 ## Template
 

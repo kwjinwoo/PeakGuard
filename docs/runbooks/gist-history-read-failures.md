@@ -5,6 +5,7 @@ type: runbook
 status: active
 related:
   - ../proposals/PROP-0001-distinguish-gist-read-failures.md
+  - ../decisions/0002-fail-closed-on-gist-read-errors.md
   - ../decisions/0001-csv-gist-persistence.md
   - ../operations.md
 code:
@@ -17,9 +18,9 @@ tests:
 
 # Gist History Read Failures
 
-## Current caution
+## Runtime behavior
 
-The current implementation logs every `GistError` as missing history and continues with an empty dataset. Until [PROP-0001](../proposals/PROP-0001-distinguish-gist-read-failures.md) is resolved, inspect the underlying cause before allowing a failed run to overwrite remote history.
+PeakGuard bootstraps automatically only when a successfully read Gist does not contain `peak_prices.csv`. Authentication, rate-limit, network, malformed-response, malformed-history, and unknown failures stop the run before price evaluation, Telegram delivery, or Gist writes. See [ADR-0002](../decisions/0002-fail-closed-on-gist-read-errors.md).
 
 ## Checks
 

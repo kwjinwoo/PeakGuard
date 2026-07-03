@@ -41,6 +41,7 @@ This is the complete catalog of durable PeakGuard Wiki documents. `README.md` ex
 - [PROP-0001: Distinguish Gist read failure modes](proposals/PROP-0001-distinguish-gist-read-failures.md)
 - [Decision index](decisions/README.md)
 - [ADR-0001: CSV in a GitHub Gist](decisions/0001-csv-gist-persistence.md)
+- [ADR-0002: Fail closed on Gist history read errors](decisions/0002-fail-closed-on-gist-read-errors.md)
 
 ## Operations and learned context
 

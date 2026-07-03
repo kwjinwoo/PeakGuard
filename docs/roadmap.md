@@ -55,20 +55,20 @@ Objective: ensure PeakGuard never silently treats operational failures as valid 
 
 ### Gist failure semantics
 
-- [ ] Introduce explicit missing-file, authentication, rate-limit, network, parse, and unknown Gist failure categories.
-- [ ] Treat a missing `peak_prices.csv` as the only automatic bootstrap case.
-- [ ] Abort signal evaluation on authentication, rate-limit, network, or malformed-history failures.
-- [ ] Prevent remote history writes after a failed history read.
-- [ ] Cover every failure category with focused tests.
+- [x] Introduce explicit missing-file, authentication, rate-limit, network, parse, and unknown Gist failure categories.
+- [x] Treat a missing `peak_prices.csv` as the only automatic bootstrap case.
+- [x] Abort signal evaluation on authentication, rate-limit, network, or malformed-history failures.
+- [x] Prevent remote history writes after a failed history read.
+- [x] Cover every failure category with focused tests.
 
 Related design: [PROP-0001](proposals/PROP-0001-distinguish-gist-read-failures.md).
 
 ### Explicit history-load behavior
 
-- [ ] Define behavior for a missing file, empty valid file, malformed CSV, and unavailable Gist.
-- [ ] Stop `_load_history_from_gist()` from treating every `GistError` as first run.
-- [ ] Distinguish ticker fetch failures from fatal persistence failures in orchestration.
-- [ ] Ensure a fatal history-load failure cannot produce discount alerts.
+- [x] Define behavior for a missing file, empty valid file, malformed CSV, and unavailable Gist.
+- [x] Stop `_load_history_from_gist()` from treating every `GistError` as first run.
+- [x] Distinguish ticker fetch failures from fatal persistence failures in orchestration.
+- [x] Ensure a fatal history-load failure cannot produce discount alerts.
 
 ### Data-health reporting
 
@@ -79,8 +79,8 @@ Related design: [PROP-0001](proposals/PROP-0001-distinguish-gist-read-failures.m
 
 ### Completion criteria
 
-- [ ] Only an explicitly missing history file can trigger bootstrap.
-- [ ] Operational failures fail safely without replacing valid history.
+- [x] Only an explicitly missing history file can trigger bootstrap.
+- [x] Operational failures fail safely without replacing valid history.
 - [ ] Users can distinguish data-health failures from asset-price signals.
 
 ## Phase 2 — Discount signal model
