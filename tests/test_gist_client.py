@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 import requests
 
-from peakguard.errors import GistError
+from peakguard.errors import GistError, GistFailureCause
 from peakguard.gist_client import read_gist, write_gist
 
 
@@ -48,8 +48,10 @@ class TestReadGist:
         }
         mocker.patch("peakguard.gist_client.requests.get", return_value=mock_response)
 
-        with pytest.raises(GistError, match="peak_prices.csv"):
+        with pytest.raises(GistError, match="peak_prices.csv") as exc_info:
             read_gist(gist_id="abc123", filename="peak_prices.csv")
+
+        assert exc_info.value.cause == GistFailureCause.MISSING_FILE
 
     def test_raises_gist_error_on_http_error(self, mocker) -> None:
         """Non-2xx response from GitHub API → GistError."""
@@ -62,6 +64,31 @@ class TestReadGist:
         with pytest.raises(GistError, match="404"):
             read_gist(gist_id="abc123", filename="peak_prices.csv")
 
+    @pytest.mark.parametrize(
+        ("status_code", "expected_cause"),
+        [
+            (401, GistFailureCause.AUTHENTICATION),
+            (403, GistFailureCause.AUTHENTICATION),
+            (429, GistFailureCause.RATE_LIMIT),
+            (500, GistFailureCause.UNKNOWN),
+        ],
+    )
+    def test_classifies_http_error(
+        self, mocker, status_code: int, expected_cause: GistFailureCause
+    ) -> None:
+        """HTTP failures expose a stable category to the orchestrator."""
+        mock_response = MagicMock(status_code=status_code)
+        http_error = requests.exceptions.HTTPError(
+            f"{status_code} error", response=mock_response
+        )
+        mock_response.raise_for_status.side_effect = http_error
+        mocker.patch("peakguard.gist_client.requests.get", return_value=mock_response)
+
+        with pytest.raises(GistError) as exc_info:
+            read_gist(gist_id="abc123", filename="peak_prices.csv")
+
+        assert exc_info.value.cause == expected_cause
+
     def test_raises_gist_error_on_network_error(self, mocker) -> None:
         """Network failure is wrapped in GistError."""
         mocker.patch(
@@ -69,8 +96,36 @@ class TestReadGist:
             side_effect=requests.exceptions.ConnectionError("network down"),
         )
 
-        with pytest.raises(GistError, match="network down"):
+        with pytest.raises(GistError, match="network down") as exc_info:
             read_gist(gist_id="abc123", filename="peak_prices.csv")
+
+        assert exc_info.value.cause == GistFailureCause.NETWORK
+
+    def test_classifies_malformed_json_response(self, mocker) -> None:
+        """Invalid GitHub JSON is a malformed-response failure."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.side_effect = requests.exceptions.JSONDecodeError(
+            "invalid JSON", "not-json", 0
+        )
+        mocker.patch("peakguard.gist_client.requests.get", return_value=mock_response)
+
+        with pytest.raises(GistError) as exc_info:
+            read_gist(gist_id="abc123", filename="peak_prices.csv")
+
+        assert exc_info.value.cause == GistFailureCause.MALFORMED_RESPONSE
+
+    def test_classifies_missing_content_as_malformed_response(self, mocker) -> None:
+        """A file entry without string content is not a bootstrap case."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"files": {"peak_prices.csv": {}}}
+        mocker.patch("peakguard.gist_client.requests.get", return_value=mock_response)
+
+        with pytest.raises(GistError) as exc_info:
+            read_gist(gist_id="abc123", filename="peak_prices.csv")
+
+        assert exc_info.value.cause == GistFailureCause.MALFORMED_RESPONSE
 
     def test_raises_value_error_when_token_missing(self, mocker) -> None:
         """Missing GIST_PAT is a programmer error → ValueError."""

@@ -10,7 +10,7 @@ import os
 
 import requests
 
-from peakguard.errors import GistError
+from peakguard.errors import GistError, GistFailureCause
 
 __all__ = ["read_gist", "write_gist"]
 
@@ -18,6 +18,33 @@ logger = logging.getLogger(__name__)
 
 _GIST_API_URL = "https://api.github.com/gists/{gist_id}"
 _REQUEST_TIMEOUT_SECONDS = 10
+
+
+def _classify_request_error(
+    exc: requests.exceptions.RequestException,
+) -> GistFailureCause:
+    """Classify a Requests failure without treating a missing Gist as bootstrap.
+
+    Args:
+        exc: The request exception raised by Requests.
+
+    Returns:
+        The stable Gist failure category exposed to orchestration.
+    """
+    if not isinstance(exc, requests.exceptions.HTTPError):
+        return GistFailureCause.NETWORK
+
+    response = exc.response
+    if response is None:
+        return GistFailureCause.UNKNOWN
+
+    if response.status_code == 429:
+        return GistFailureCause.RATE_LIMIT
+    if response.status_code in {401, 403}:
+        if response.headers.get("X-RateLimit-Remaining") == "0":
+            return GistFailureCause.RATE_LIMIT
+        return GistFailureCause.AUTHENTICATION
+    return GistFailureCause.UNKNOWN
 
 
 def _get_github_token() -> str:
@@ -75,13 +102,35 @@ def read_gist(*, gist_id: str, filename: str) -> str:
         )
         response.raise_for_status()
     except requests.exceptions.RequestException as exc:
-        raise GistError(message=str(exc)) from exc
+        raise GistError(message=str(exc), cause=_classify_request_error(exc)) from exc
 
-    files = response.json().get("files", {})
+    try:
+        payload = response.json()
+        files = payload["files"]
+        if not isinstance(files, dict):
+            raise TypeError("'files' must be an object")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise GistError(
+            message="GitHub returned a malformed Gist response",
+            cause=GistFailureCause.MALFORMED_RESPONSE,
+        ) from exc
+
     if filename not in files:
-        raise GistError(message=f"File '{filename}' not found in gist '{gist_id}'")
+        raise GistError(
+            message=f"File '{filename}' not found in gist '{gist_id}'",
+            cause=GistFailureCause.MISSING_FILE,
+        )
 
-    return files[filename]["content"]
+    try:
+        content = files[filename]["content"]
+        if not isinstance(content, str):
+            raise TypeError("file content must be a string")
+    except (KeyError, TypeError) as exc:
+        raise GistError(
+            message=f"GitHub returned malformed content for '{filename}'",
+            cause=GistFailureCause.MALFORMED_RESPONSE,
+        ) from exc
+    return content
 
 
 def write_gist(*, gist_id: str, filename: str, content: str) -> None:
@@ -108,4 +157,4 @@ def write_gist(*, gist_id: str, filename: str, content: str) -> None:
         )
         response.raise_for_status()
     except requests.exceptions.RequestException as exc:
-        raise GistError(message=str(exc)) from exc
+        raise GistError(message=str(exc), cause=_classify_request_error(exc)) from exc
