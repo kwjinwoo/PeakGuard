@@ -23,6 +23,7 @@ from peakguard.mdd_calc import (
     calculate_bounce_from_bottom,
     calculate_days_since_ath,
     calculate_drawdown,
+    calculate_price_zscore,
     check_threshold,
     get_rolling_ath,
     update_price_history,
@@ -230,6 +231,12 @@ def run() -> None:
         # Compute new rolling ATH
         new_ath = get_rolling_ath(history[ticker], reference_date, _WINDOW_DAYS)
 
+        try:
+            zscore = calculate_price_zscore(current_price, history[ticker])
+        except ValueError:
+            zscore = None
+        zscore_alert = zscore is not None and zscore <= alert_limits.zscore_threshold
+
         # ATH change detection — only flag when ATH actually increased
         ath_updated = old_ath is not None and new_ath > old_ath
 
@@ -249,6 +256,8 @@ def run() -> None:
                 bounce_alert=False,
                 ath_updated=ath_updated,
                 currency=cfg.currency,
+                zscore=zscore,
+                zscore_alert=zscore_alert,
             )
         else:
             drawdown = calculate_drawdown(current_price, new_ath)
@@ -281,6 +290,8 @@ def run() -> None:
                 bounce_alert=bounce_alert,
                 ath_updated=ath_updated,
                 currency=cfg.currency,
+                zscore=zscore,
+                zscore_alert=zscore_alert,
             )
 
         summaries.append(summary)

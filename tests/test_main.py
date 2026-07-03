@@ -1050,6 +1050,96 @@ class TestRunMetricAlerts:
         assert amzn.bounce_pct is not None
         assert amzn.bounce_pct >= 3.0
 
+    @pytest.mark.parametrize(
+        ("zscore", "expected_alert"),
+        [(-2.0001, True), (-2.0, True), (-1.9999, False)],
+    )
+    def test_zscore_threshold_is_inclusive(
+        self,
+        mocker,
+        zscore: float,
+        expected_alert: bool,
+    ) -> None:
+        """Z-score alerts activate at or below the configured threshold."""
+        mocker.patch(
+            "peakguard.main.load_portfolio",
+            return_value=[
+                TickerConfig(ticker="AMZN", name="Amazon", threshold=50.0),
+            ],
+        )
+        mocker.patch(
+            "peakguard.main.load_alert_thresholds",
+            return_value=AlertThresholds(
+                days_since_ath_limit=180,
+                zscore_threshold=-2.0,
+                bounce_from_bottom_min=50.0,
+            ),
+        )
+        mocker.patch("peakguard.main.read_gist", return_value=_METRICS_HISTORY_CSV)
+        mocker.patch(
+            "peakguard.main.fetch_price",
+            return_value=PriceResult(
+                ticker="AMZN", price=390.0, fetched_at=date(2026, 3, 6)
+            ),
+        )
+        mocker.patch("peakguard.main.calculate_price_zscore", return_value=zscore)
+        mocker.patch("peakguard.main.write_gist")
+        mock_send_summary = mocker.patch("peakguard.main.send_daily_summary")
+
+        from peakguard.main import run
+
+        run()
+
+        summary = mock_send_summary.call_args.args[0][0]
+        assert summary.zscore == zscore
+        assert summary.zscore_alert is expected_alert
+
+    @pytest.mark.parametrize(
+        "closing_prices",
+        [
+            [ClosingPrice(ticker="AMZN", date=date(2026, 3, 6), price=100.0)],
+            [
+                ClosingPrice(ticker="AMZN", date=date(2026, 3, 5), price=100.0),
+                ClosingPrice(ticker="AMZN", date=date(2026, 3, 6), price=100.0),
+            ],
+        ],
+    )
+    def test_uncalculable_zscore_is_safe_none(
+        self, mocker, closing_prices: list[ClosingPrice]
+    ) -> None:
+        """Insufficient or zero-variance history does not abort the run."""
+        mocker.patch(
+            "peakguard.main.load_portfolio",
+            return_value=[
+                TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
+            ],
+        )
+        mocker.patch(
+            "peakguard.main.load_alert_thresholds",
+            return_value=AlertThresholds(
+                days_since_ath_limit=180,
+                zscore_threshold=-2.0,
+                bounce_from_bottom_min=3.0,
+            ),
+        )
+        mocker.patch(
+            "peakguard.main.read_gist",
+            side_effect=GistError(
+                message="missing", cause=GistFailureCause.MISSING_FILE
+            ),
+        )
+        mocker.patch("peakguard.main.fetch_history", return_value=closing_prices)
+        mocker.patch("peakguard.main.write_gist")
+        mock_send_summary = mocker.patch("peakguard.main.send_daily_summary")
+
+        from peakguard.main import run
+
+        run()
+
+        summary = mock_send_summary.call_args.args[0][0]
+        assert summary.zscore is None
+        assert summary.zscore_alert is False
+
     @patch("peakguard.main.write_gist")
     @patch("peakguard.main.send_daily_summary")
     @patch("peakguard.main.fetch_price")
