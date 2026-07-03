@@ -4,6 +4,7 @@ from peakguard.errors import (
     FetchError,
     FetchFailureCause,
     GistError,
+    GistFailureCause,
     NotificationError,
     PeakGuardError,
     StorageError,
@@ -147,6 +148,14 @@ class TestGistError:
     def test_stores_message(self) -> None:
         error = GistError(message="API rate limit exceeded")
         assert error.message == "API rate limit exceeded"
+        assert error.cause == GistFailureCause.UNKNOWN
+
+    def test_stores_failure_cause(self) -> None:
+        error = GistError(
+            message="peak_prices.csv is missing",
+            cause=GistFailureCause.MISSING_FILE,
+        )
+        assert error.cause == GistFailureCause.MISSING_FILE
 
     def test_str_returns_message(self) -> None:
         error = GistError(message="404 Not Found")
