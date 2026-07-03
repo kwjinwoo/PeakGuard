@@ -330,6 +330,27 @@ class TestTickerSummary:
         )
         assert summary.has_alert is True
 
+    def test_has_alert_true_when_zscore_alert(self) -> None:
+        """A statistically low price makes the summary reportable."""
+        summary = TickerSummary(
+            ticker="AMZN",
+            name="Amazon",
+            current_price=80.0,
+            ath=140.0,
+            mdd_pct=42.86,
+            days_since_ath=30,
+            days_since_ath_limit=180,
+            bounce_pct=0.0,
+            mdd_alert=False,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+            zscore=-2.53,
+            zscore_alert=True,
+        )
+
+        assert summary.has_alert is True
+
     def test_optional_fields_accept_none(self) -> None:
         """Optional fields (mdd_pct, days_since_ath, etc.) accept None."""
         summary = TickerSummary(
@@ -566,6 +587,58 @@ class TestFormatDailySummary:
         assert "📈" in result
         assert "-16.06%" in result
         assert "+27.43%" in result
+
+    def test_zscore_alert_shows_status_and_value(self) -> None:
+        """A breached Z-score threshold is visible in the ticker section."""
+        summaries = [
+            TickerSummary(
+                ticker="AMZN",
+                name="Amazon",
+                current_price=80.0,
+                ath=140.0,
+                mdd_pct=42.86,
+                days_since_ath=30,
+                days_since_ath_limit=180,
+                bounce_pct=0.0,
+                mdd_alert=False,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+                zscore=-2.53,
+                zscore_alert=True,
+            )
+        ]
+
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+
+        assert "Z-score 경고" in result
+        assert "Z-score: -2.5300" in result
+
+    def test_non_alert_zscore_is_context_for_another_alert(self) -> None:
+        """Reportable tickers show Z-score even when it did not breach."""
+        summaries = [
+            TickerSummary(
+                ticker="AMZN",
+                name="Amazon",
+                current_price=110.0,
+                ath=140.0,
+                mdd_pct=21.43,
+                days_since_ath=30,
+                days_since_ath_limit=180,
+                bounce_pct=10.0,
+                mdd_alert=True,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+                zscore=-1.25,
+                zscore_alert=False,
+            )
+        ]
+
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+
+        assert "Z-score 경고" not in result
+        assert "Z-score: -1.2500" in result
 
     def test_triple_alert_mdd_stale_bounce(self) -> None:
         """Ticker with MDD, stale ATH, and bounce shows all three."""

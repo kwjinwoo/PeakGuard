@@ -98,6 +98,8 @@ class TickerSummary:
         bounce_alert: True if bounce_pct exceeds the minimum threshold.
         ath_updated: True if a new ATH was reached today.
         currency: The currency code for price display (default: "USD").
+        zscore: Current price Z-score, or None when it cannot be calculated.
+        zscore_alert: True if Z-score meets the configured low-price threshold.
 
     Raises:
         ValueError: If ticker is empty.
@@ -116,6 +118,8 @@ class TickerSummary:
     bounce_alert: bool
     ath_updated: bool
     currency: str = "USD"
+    zscore: float | None = None
+    zscore_alert: bool = False
 
     def __post_init__(self) -> None:
         if not self.ticker or not self.ticker.strip():
@@ -129,6 +133,7 @@ class TickerSummary:
             or self.ath_stale_alert
             or self.bounce_alert
             or self.ath_updated
+            or self.zscore_alert
         )
 
 
@@ -166,6 +171,8 @@ def _format_ticker_section(summary: TickerSummary) -> str:
         status_parts.append("📈 반등 신호")
     if summary.ath_updated:
         status_parts.append("🏔 ATH 갱신")
+    if summary.zscore_alert:
+        status_parts.append("📐 Z-score 경고")
 
     lines: list[str] = []
     lines.append(f"{summary.ticker} ({summary.name})")
@@ -179,6 +186,9 @@ def _format_ticker_section(summary: TickerSummary) -> str:
     # MDD line
     if summary.mdd_pct is not None and summary.mdd_alert:
         lines.append(f"고점 대비 하락률(MDD): -{summary.mdd_pct:.2f}%")
+
+    if summary.zscore is not None:
+        lines.append(f"Z-score: {summary.zscore:.4f}")
 
     # ATH stale line
     if (
