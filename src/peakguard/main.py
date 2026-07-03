@@ -25,6 +25,7 @@ from peakguard.mdd_calc import (
     calculate_drawdown,
     calculate_price_zscore,
     check_threshold,
+    derive_review_level,
     get_rolling_ath,
     update_price_history,
 )
@@ -242,6 +243,11 @@ def run() -> None:
 
         # Build TickerSummary based on whether price is below ATH
         if current_price >= new_ath:
+            review_level = derive_review_level(
+                mdd_alert=False,
+                zscore_alert=zscore_alert,
+                bounce_alert=False,
+            )
             summary = TickerSummary(
                 ticker=ticker,
                 name=cfg.name,
@@ -258,6 +264,7 @@ def run() -> None:
                 currency=cfg.currency,
                 zscore=zscore,
                 zscore_alert=zscore_alert,
+                review_level=review_level,
             )
         else:
             drawdown = calculate_drawdown(current_price, new_ath)
@@ -275,6 +282,11 @@ def run() -> None:
 
             bounce = calculate_bounce_from_bottom(current_price, history[ticker])
             bounce_alert = bounce >= alert_limits.bounce_from_bottom_min
+            review_level = derive_review_level(
+                mdd_alert=mdd_alert,
+                zscore_alert=zscore_alert,
+                bounce_alert=bounce_alert,
+            )
 
             summary = TickerSummary(
                 ticker=ticker,
@@ -292,6 +304,7 @@ def run() -> None:
                 currency=cfg.currency,
                 zscore=zscore,
                 zscore_alert=zscore_alert,
+                review_level=review_level,
             )
 
         summaries.append(summary)

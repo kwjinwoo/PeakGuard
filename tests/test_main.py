@@ -14,6 +14,7 @@ from peakguard.errors import (
     NotificationError,
 )
 from peakguard.fetcher import PriceResult
+from peakguard.mdd_calc import ReviewLevel
 from peakguard.notifier import (
     FetchErrorData,
     HealthStatus,
@@ -167,6 +168,7 @@ class TestRun:
         msft = next(s for s in summaries if s.ticker == "MSFT")
         assert amzn.mdd_alert is True
         assert amzn.mdd_pct == 12.0
+        assert amzn.review_level == ReviewLevel.WATCH
         assert msft.mdd_alert is False
 
     @patch("peakguard.main.write_gist")
@@ -1093,6 +1095,44 @@ class TestRunMetricAlerts:
         summary = mock_send_summary.call_args.args[0][0]
         assert summary.zscore == zscore
         assert summary.zscore_alert is expected_alert
+        expected_level = ReviewLevel.ATTRACTIVE if expected_alert else ReviewLevel.NONE
+        assert summary.review_level == expected_level
+
+    def test_mdd_and_zscore_breach_is_deep_discount(self, mocker) -> None:
+        """Joint drawdown and statistical weakness produce the strongest level."""
+        mocker.patch(
+            "peakguard.main.load_portfolio",
+            return_value=[
+                TickerConfig(ticker="AMZN", name="Amazon", threshold=10.0),
+            ],
+        )
+        mocker.patch(
+            "peakguard.main.load_alert_thresholds",
+            return_value=AlertThresholds(
+                days_since_ath_limit=180,
+                zscore_threshold=-2.0,
+                bounce_from_bottom_min=50.0,
+            ),
+        )
+        mocker.patch("peakguard.main.read_gist", return_value=_METRICS_HISTORY_CSV)
+        mocker.patch(
+            "peakguard.main.fetch_price",
+            return_value=PriceResult(
+                ticker="AMZN", price=390.0, fetched_at=date(2026, 3, 6)
+            ),
+        )
+        mocker.patch("peakguard.main.calculate_price_zscore", return_value=-2.1)
+        mocker.patch("peakguard.main.write_gist")
+        mock_send_summary = mocker.patch("peakguard.main.send_daily_summary")
+
+        from peakguard.main import run
+
+        run()
+
+        summary = mock_send_summary.call_args.args[0][0]
+        assert summary.mdd_alert is True
+        assert summary.zscore_alert is True
+        assert summary.review_level == ReviewLevel.DEEP_DISCOUNT
 
     @pytest.mark.parametrize(
         "closing_prices",
@@ -1139,6 +1179,7 @@ class TestRunMetricAlerts:
         summary = mock_send_summary.call_args.args[0][0]
         assert summary.zscore is None
         assert summary.zscore_alert is False
+        assert summary.review_level == ReviewLevel.NONE
 
     @patch("peakguard.main.write_gist")
     @patch("peakguard.main.send_daily_summary")
