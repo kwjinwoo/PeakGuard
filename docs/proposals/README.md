@@ -5,6 +5,7 @@ type: index
 status: active
 related:
   - PROP-0001-distinguish-gist-read-failures.md
+  - PROP-0002-define-discount-review-levels.md
   - ../roadmap.md
   - ../decisions/README.md
 ---
@@ -13,9 +14,10 @@ related:
 
 Proposals describe changes that need evaluation before implementation. They are not commitments.
 
-## Active
+## Accepted
 
 - [PROP-0001: Distinguish Gist read failure modes](PROP-0001-distinguish-gist-read-failures.md)
+- [PROP-0002: Define discount review levels](PROP-0002-define-discount-review-levels.md)
 
 ## Lifecycle
 

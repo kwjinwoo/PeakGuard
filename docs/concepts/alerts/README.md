@@ -20,7 +20,7 @@ tests:
 
 # Alert Catalog
 
-PeakGuard sends one consolidated daily Telegram report. Only ticker summaries with at least one active signal are included; fetch failures can be appended separately. A compact data-health section distinguishes successful, partial, and aborted evaluation paths.
+PeakGuard sends one consolidated daily Telegram report. Only ticker summaries with an active signal or review level are included; fetch failures can be appended separately. Each ticker leads with its [discount review level](../review-levels.md), and a compact data-health section distinguishes successful, partial, and aborted evaluation paths.
 
 | Signal | Current condition | Implemented in daily report |
 | --- | --- | --- |

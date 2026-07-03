@@ -6,6 +6,7 @@ status: active
 related:
   - 0001-csv-gist-persistence.md
   - 0002-fail-closed-on-gist-read-errors.md
+  - 0003-discount-review-level-precedence.md
   - ../proposals/README.md
 ---
 
@@ -17,6 +18,7 @@ Architecture Decision Records (ADRs) preserve the rationale for choices that con
 
 - [ADR-0001: Persist rolling history as CSV in a GitHub Gist](0001-csv-gist-persistence.md)
 - [ADR-0002: Fail closed on Gist history read errors](0002-fail-closed-on-gist-read-errors.md)
+- [ADR-0003: Discount review level precedence](0003-discount-review-level-precedence.md)
 
 ## Template
 

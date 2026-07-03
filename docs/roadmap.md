@@ -41,7 +41,7 @@ For verified current behavior and known gaps, see [Current status](status.md). D
 | Phase | Theme | State | Main outcome |
 | ---: | --- | --- | --- |
 | 1 | Reliability and data safety | Complete | Never evaluate signals from invalid persistence state |
-| 2 | Discount signal model | In progress | Convert raw metrics into investment-review levels |
+| 2 | Discount signal model | Complete | Convert raw metrics into investment-review levels |
 | 3 | Asset taxonomy | Planned | Apply different rules to stocks, ETFs, bonds, and gold |
 | 4 | Portfolio-aware alerts | Planned | Combine price signals with PortfoTrack allocation state |
 | 5 | Reporting and UX | Planned | Produce concise, non-prescriptive review prompts |
@@ -96,24 +96,24 @@ Objective: move from independent alert booleans to a clear investment-review mod
 
 ### Discount levels
 
-- [ ] Define domain-level review states such as `NONE`, `WATCH`, `ATTRACTIVE`, `DEEP_DISCOUNT`, `THESIS_CHECK`, and `RECOVERY_WATCH`.
-- [ ] Derive the level from MDD, Z-score, and bounce inputs.
-- [ ] Preserve existing MDD threshold behavior during migration.
-- [ ] Make `THESIS_CHECK` override ordinary discount language.
-- [ ] Show the review level before raw metrics in reports.
+- [x] Define domain-level review states such as `NONE`, `WATCH`, `ATTRACTIVE`, `DEEP_DISCOUNT`, `THESIS_CHECK`, and `RECOVERY_WATCH`.
+- [x] Derive the level from MDD, Z-score, and bounce inputs.
+- [x] Preserve existing MDD threshold behavior during migration.
+- [x] Make `THESIS_CHECK` override ordinary discount language.
+- [x] Show the review level before raw metrics in reports.
 
 ### Combined interpretation
 
-- [ ] Treat high MDD with ordinary Z-score as a drawdown that may be normal for the asset.
-- [ ] Treat high MDD with low Z-score as a stronger review trigger.
-- [ ] Detect statistically weak prices even when ATH drawdown is limited.
-- [ ] Document and test the exact level boundaries before enabling them in production.
+- [x] Treat high MDD with ordinary Z-score as a drawdown that may be normal for the asset.
+- [x] Treat high MDD with low Z-score as a stronger review trigger.
+- [x] Detect statistically weak prices even when ATH drawdown is limited.
+- [x] Document and test the exact level boundaries before enabling them in production.
 
 ### Completion criteria
 
 - [x] Reports expose both MDD and Z-score context.
-- [ ] Review levels replace ambiguous collections of alert flags.
-- [ ] Report language remains a prompt for review rather than investment advice.
+- [x] Review levels replace ambiguous collections of alert flags.
+- [x] Report language remains a prompt for review rather than investment advice.
 
 ## Phase 3 — Asset taxonomy
 

@@ -55,6 +55,6 @@ Both are immutable. Invalid configuration raises native validation errors.
 
 ## Daily report input
 
-`TickerSummary` aggregates calculated values and alert flags for one ticker, including an optional Z-score and its threshold result. `FetchErrorData` represents a skipped ticker fetch. `RunHealth` records fetch counts, Gist read/write status, whether signals were evaluated, and whether remote history was updated. `peakguard.notifier` converts these values to one plain-text Telegram message.
+`TickerSummary` aggregates calculated values, alert flags, and the leading `ReviewLevel` for one ticker, including an optional Z-score and its threshold result. `FetchErrorData` represents a skipped ticker fetch. `RunHealth` records fetch counts, Gist read/write status, whether signals were evaluated, and whether remote history was updated. `peakguard.notifier` converts these values to one plain-text Telegram message.
 
 See [Configuration](configuration.md), [Domain model](domain-model.md), and [ADR-0001](../decisions/0001-csv-gist-persistence.md).

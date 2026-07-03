@@ -28,7 +28,7 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - The pipeline reads and writes `peak_prices.csv` in a GitHub Gist.
 - Portfolio and alert limits are loaded from `config/portfolio.yaml`.
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
-- Tests: **256 passed** on 2026-07-04.
+- Tests: **273 passed** on 2026-07-04.
 - Pre-commit: all configured hooks passed on 2026-07-04.
 
 ## Implemented capabilities
@@ -45,6 +45,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Final price-fetch, Gist read/write, signal-evaluation, and remote-history health in every reachable daily report path.
 - Health-only Telegram reporting before fatal Gist read or write errors are propagated to fail the workflow.
 - Inclusive configured Z-score alerts in daily orchestration, with safe unavailable handling for insufficient or zero-variance history.
+- Deterministic discount review levels derived from MDD, Z-score, and bounce, shown before supporting metrics.
+- Explicit `THESIS_CHECK` precedence reserved for a future non-price asset policy input.
 
 ## Known gaps and concerns
 

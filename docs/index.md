@@ -28,6 +28,7 @@ This is the complete catalog of durable PeakGuard Wiki documents. `README.md` ex
 - [Domain model](concepts/domain-model.md)
 - [Configuration](concepts/configuration.md)
 - [Data contracts](concepts/data-contracts.md)
+- [Discount review levels](concepts/review-levels.md)
 - [Alert catalog](concepts/alerts/README.md)
 - [Price and ATH signals](concepts/alerts/price-signals.md)
 - [Fetch failure reporting](concepts/alerts/fetch-failures.md)
@@ -39,9 +40,11 @@ This is the complete catalog of durable PeakGuard Wiki documents. `README.md` ex
 - [Product roadmap](roadmap.md)
 - [Proposal index](proposals/README.md)
 - [PROP-0001: Distinguish Gist read failure modes](proposals/PROP-0001-distinguish-gist-read-failures.md)
+- [PROP-0002: Define discount review levels](proposals/PROP-0002-define-discount-review-levels.md)
 - [Decision index](decisions/README.md)
 - [ADR-0001: CSV in a GitHub Gist](decisions/0001-csv-gist-persistence.md)
 - [ADR-0002: Fail closed on Gist history read errors](decisions/0002-fail-closed-on-gist-read-errors.md)
+- [ADR-0003: Discount review level precedence](decisions/0003-discount-review-level-precedence.md)
 
 ## Operations and learned context
 

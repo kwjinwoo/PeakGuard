@@ -7,6 +7,7 @@ related:
   - domain-model.md
   - configuration.md
   - data-contracts.md
+  - review-levels.md
   - alerts/README.md
 ---
 
@@ -17,6 +18,7 @@ These pages contain canonical, current-state knowledge about PeakGuard.
 - [Domain model](domain-model.md): price history, rolling ATH, MDD, and alert semantics.
 - [Configuration](configuration.md): `portfolio.yaml` contract and validation.
 - [Data contracts](data-contracts.md): persisted CSV and integration-facing data shapes.
+- [Discount review levels](review-levels.md): MDD, Z-score, bounce, and thesis precedence.
 - [Alert catalog](alerts/README.md): alert inputs, conditions, and output behavior.
 - [Testing strategy](testing-strategy.md): test boundaries and external isolation.
 - [Glossary](glossary.md): canonical project terminology.
