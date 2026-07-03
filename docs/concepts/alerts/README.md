@@ -29,7 +29,7 @@ PeakGuard sends one consolidated daily Telegram report. Only ticker summaries wi
 | Stale ATH | Days since the in-window high exceed configured limit | Yes |
 | Bounce | Recovery from the window low meets or exceeds configured minimum | Yes |
 | Fetch failure | yfinance fetch raises `FetchError` | Yes |
-| Z-score | Current price standardized against history | No; calculation and config only |
+| Z-score | Current price is at or below the configured negative Z-score threshold | Yes |
 
 Detailed pages:
 

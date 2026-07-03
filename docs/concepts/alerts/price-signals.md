@@ -3,7 +3,7 @@ id: price-signals
 title: Price and ATH Signals
 type: concept
 status: active
-last_verified: 2026-07-02
+last_verified: 2026-07-04
 related:
   - README.md
   - ../domain-model.md
@@ -40,4 +40,6 @@ Bounce is `(current price - window low) / window low * 100`, rounded to two deci
 
 ## Z-score
 
-`calculate_price_zscore()` uses sample standard deviation and requires at least two non-identical history values. The config value exists, but the current orchestrator and report model do not consume it. Treat Z-score alerts as future work, not current behavior.
+`calculate_price_zscore()` uses sample standard deviation and requires at least two non-identical history values. The orchestrator evaluates the updated rolling history and activates an alert when `zscore <= zscore_threshold`. Insufficient or zero-variance history produces no Z-score and does not abort the run.
+
+`TickerSummary` carries both the value and alert flag. A Z-score breach makes the ticker reportable; when another alert already makes a ticker reportable, a calculable non-breaching Z-score is still shown as context.

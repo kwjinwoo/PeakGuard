@@ -41,7 +41,7 @@ For verified current behavior and known gaps, see [Current status](status.md). D
 | Phase | Theme | State | Main outcome |
 | ---: | --- | --- | --- |
 | 1 | Reliability and data safety | Complete | Never evaluate signals from invalid persistence state |
-| 2 | Discount signal model | Planned | Convert raw metrics into investment-review levels |
+| 2 | Discount signal model | In progress | Convert raw metrics into investment-review levels |
 | 3 | Asset taxonomy | Planned | Apply different rules to stocks, ETFs, bonds, and gold |
 | 4 | Portfolio-aware alerts | Planned | Combine price signals with PortfoTrack allocation state |
 | 5 | Reporting and UX | Planned | Produce concise, non-prescriptive review prompts |
@@ -89,10 +89,10 @@ Objective: move from independent alert booleans to a clear investment-review mod
 
 ### Z-score integration
 
-- [ ] Add Z-score to `TickerSummary` and daily orchestration.
-- [ ] Evaluate the configured `zscore_threshold`.
-- [ ] Include Z-score in Telegram report entries.
-- [ ] Connect domain Z-score tests to orchestration and notifier tests.
+- [x] Add Z-score to `TickerSummary` and daily orchestration.
+- [x] Evaluate the configured `zscore_threshold`.
+- [x] Include Z-score in Telegram report entries.
+- [x] Connect domain Z-score tests to orchestration and notifier tests.
 
 ### Discount levels
 
@@ -111,7 +111,7 @@ Objective: move from independent alert booleans to a clear investment-review mod
 
 ### Completion criteria
 
-- [ ] Reports expose both MDD and Z-score context.
+- [x] Reports expose both MDD and Z-score context.
 - [ ] Review levels replace ambiguous collections of alert flags.
 - [ ] Report language remains a prompt for review rather than investment advice.
 

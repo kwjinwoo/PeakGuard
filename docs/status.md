@@ -28,7 +28,7 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - The pipeline reads and writes `peak_prices.csv` in a GitHub Gist.
 - Portfolio and alert limits are loaded from `config/portfolio.yaml`.
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
-- Tests: **248 passed** on 2026-07-04.
+- Tests: **256 passed** on 2026-07-04.
 - Pre-commit: all configured hooks passed on 2026-07-04.
 
 ## Implemented capabilities
@@ -37,17 +37,17 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Daily close fetch and date-based history upsert.
 - Inclusive 365-day rolling ATH.
 - Drawdown, threshold, days-since-ATH, Z-score, and bounce calculations.
-- MDD, stale-ATH, bounce, ATH-update, and fetch-failure report formatting.
+- MDD, Z-score, stale-ATH, bounce, ATH-update, and fetch-failure report formatting.
 - CSV serialization and local development file I/O.
 - GitHub Gist persistence and Telegram delivery.
 - Graceful continuation when an individual ticker fetch fails.
 - Typed Gist failure categories with fail-closed history loading; only an explicitly missing `peak_prices.csv` triggers bootstrap.
 - Final price-fetch, Gist read/write, signal-evaluation, and remote-history health in every reachable daily report path.
 - Health-only Telegram reporting before fatal Gist read or write errors are propagated to fail the workflow.
+- Inclusive configured Z-score alerts in daily orchestration, with safe unavailable handling for insufficient or zero-variance history.
 
 ## Known gaps and concerns
 
-- A Z-score threshold is configured and its calculation exists, but the daily orchestration does not currently add a Z-score signal to `TickerSummary` or the Telegram report. See [Phase 2](roadmap.md#phase-2--discount-signal-model).
 - The README's current tracked-assets table lists only US equities while `portfolio.yaml` also contains Korean ETFs.
 
 ## Update rule
