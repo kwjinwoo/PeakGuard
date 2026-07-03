@@ -3,7 +3,7 @@ id: alert-catalog
 title: Alert Catalog
 type: index
 status: active
-last_verified: 2026-07-02
+last_verified: 2026-07-04
 related:
   - price-signals.md
   - fetch-failures.md
@@ -20,7 +20,7 @@ tests:
 
 # Alert Catalog
 
-PeakGuard sends one consolidated daily Telegram report. Only ticker summaries with at least one active signal are included; fetch failures can be appended separately.
+PeakGuard sends one consolidated daily Telegram report. Only ticker summaries with at least one active signal are included; fetch failures can be appended separately. A compact data-health section distinguishes successful, partial, and aborted evaluation paths.
 
 | Signal | Current condition | Implemented in daily report |
 | --- | --- | --- |

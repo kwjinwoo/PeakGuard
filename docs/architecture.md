@@ -3,7 +3,7 @@ id: system-architecture
 title: System Overview
 type: architecture
 status: active
-last_verified: 2026-07-02
+last_verified: 2026-07-04
 related:
   - concepts/domain-model.md
   - operations.md
@@ -25,8 +25,10 @@ PeakGuard is a synchronous Python 3.12+ batch application. GitHub Actions starts
 3. `peakguard.gist_client` reads `peak_prices.csv` from a GitHub Gist.
 4. For each ticker, `peakguard.fetcher` obtains either one year of bootstrap history or the latest close from yfinance.
 5. `peakguard.mdd_calc` updates the rolling history and calculates metrics without performing I/O.
-6. `peakguard.notifier` formats active alerts and fetch failures into one Telegram report and sends it.
-7. `peakguard.storage` serializes updated history, and `peakguard.gist_client` writes it back to the Gist.
+6. `peakguard.storage` serializes updated history, and `peakguard.gist_client` writes it back to the Gist.
+7. `peakguard.notifier` formats active alerts, fetch failures, and final data health into one Telegram report and sends it.
+
+Fatal Gist reads skip price evaluation and writes but still attempt a health-only report before the error fails the workflow. Gist writes happen before notification so the report describes the actual persistence outcome.
 
 ## Boundaries
 
@@ -51,5 +53,6 @@ Domain code must remain deterministic and unaware of files, environment variable
 - CSV-in-Gist persistence; no database or ORM.
 - One consolidated Telegram report rather than one message per ticker.
 - Partial ticker fetch failures do not stop processing other tickers.
+- Fatal persistence failures are reported when Telegram remains available and then propagated.
 
 See [Domain model](concepts/domain-model.md), [Operations](operations.md), and [ADR-0001](decisions/0001-csv-gist-persistence.md).

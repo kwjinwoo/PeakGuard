@@ -40,7 +40,7 @@ For verified current behavior and known gaps, see [Current status](status.md). D
 
 | Phase | Theme | State | Main outcome |
 | ---: | --- | --- | --- |
-| 1 | Reliability and data safety | In progress | Never evaluate signals from invalid persistence state |
+| 1 | Reliability and data safety | Complete | Never evaluate signals from invalid persistence state |
 | 2 | Discount signal model | Planned | Convert raw metrics into investment-review levels |
 | 3 | Asset taxonomy | Planned | Apply different rules to stocks, ETFs, bonds, and gold |
 | 4 | Portfolio-aware alerts | Planned | Combine price signals with PortfoTrack allocation state |
@@ -72,16 +72,16 @@ Related design: [PROP-0001](proposals/PROP-0001-distinguish-gist-read-failures.m
 
 ### Data-health reporting
 
-- [ ] Add minimal price-fetch, Gist-read, and Gist-write health to the daily report.
-- [ ] Report partial ticker fetch success without presenting it as a fully healthy run.
-- [ ] Explain when no price signals were evaluated and remote history was not modified.
-- [ ] Test healthy, partial-fetch, and fatal-persistence report paths.
+- [x] Add minimal price-fetch, Gist-read, and Gist-write health to the daily report.
+- [x] Report partial ticker fetch success without presenting it as a fully healthy run.
+- [x] Explain when no price signals were evaluated and remote history was not modified.
+- [x] Test healthy, partial-fetch, and fatal-persistence report paths.
 
 ### Completion criteria
 
 - [x] Only an explicitly missing history file can trigger bootstrap.
 - [x] Operational failures fail safely without replacing valid history.
-- [ ] Users can distinguish data-health failures from asset-price signals.
+- [x] Users can distinguish data-health failures from asset-price signals.
 
 ## Phase 2 — Discount signal model
 
@@ -175,7 +175,7 @@ Objective: make Telegram reports concise, useful on mobile, and difficult to mis
 
 - [ ] Group entries into `Action Review`, `Watch Only`, and optional `No Action` sections.
 - [ ] Keep price signal, portfolio context, and suggested review visually separate.
-- [ ] Add a compact data-health section.
+- [x] Add a compact data-health section.
 - [ ] Keep the consolidated single-message delivery model.
 
 ### Language policy

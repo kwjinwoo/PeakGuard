@@ -27,8 +27,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Production runs through `.github/workflows/mdd-check.yml` on weekdays and supports manual dispatch.
 - The pipeline reads and writes `peak_prices.csv` in a GitHub Gist.
 - Portfolio and alert limits are loaded from `config/portfolio.yaml`.
-- Daily output is one consolidated Telegram message containing active alerts and fetch failures.
-- Tests: **241 passed** on 2026-07-04.
+- Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
+- Tests: **248 passed** on 2026-07-04.
 - Pre-commit: all configured hooks passed on 2026-07-04.
 
 ## Implemented capabilities
@@ -42,6 +42,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - GitHub Gist persistence and Telegram delivery.
 - Graceful continuation when an individual ticker fetch fails.
 - Typed Gist failure categories with fail-closed history loading; only an explicitly missing `peak_prices.csv` triggers bootstrap.
+- Final price-fetch, Gist read/write, signal-evaluation, and remote-history health in every reachable daily report path.
+- Health-only Telegram reporting before fatal Gist read or write errors are propagated to fail the workflow.
 
 ## Known gaps and concerns
 

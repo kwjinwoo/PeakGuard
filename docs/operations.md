@@ -3,7 +3,7 @@ id: operations
 title: Operations
 type: operations
 status: active
-last_verified: 2026-07-02
+last_verified: 2026-07-04
 related:
   - architecture.md
   - runbooks/README.md
@@ -43,11 +43,13 @@ Rows are sorted by ticker and date. Local storage functions exist for developmen
 ## Failure behavior
 
 - One ticker fetch failure is collected and processing continues with other tickers.
-- Telegram request failures are logged and do not prevent the final history-save attempt.
+- Updated history is written before Telegram delivery so the report contains the final Gist-write outcome.
+- Telegram request failures are logged after the persistence attempt and do not roll back a successful write.
 - Missing required environment variables are fatal validation errors.
 - Network requests use finite timeouts and typed integration errors.
 - Treat malformed persisted data as an operational incident; do not silently invent replacement history without confirming intended recovery behavior.
 - Bootstrap automatically only when `peak_prices.csv` is absent from an otherwise valid Gist response. All other Gist read or history-parse failures stop the run before evaluation and remote writes.
+- Fatal Gist read and write failures attempt a data-health report and are then re-raised so GitHub Actions marks the run failed.
 
 ## Local commands
 
