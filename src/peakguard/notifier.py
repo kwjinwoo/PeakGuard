@@ -14,6 +14,7 @@ from enum import Enum
 import requests
 
 from peakguard.errors import FetchFailureCause, NotificationError
+from peakguard.mdd_calc import ReviewLevel
 
 __all__ = [
     "FetchErrorData",
@@ -100,6 +101,7 @@ class TickerSummary:
         currency: The currency code for price display (default: "USD").
         zscore: Current price Z-score, or None when it cannot be calculated.
         zscore_alert: True if Z-score meets the configured low-price threshold.
+        review_level: Highest-priority investment-review state.
 
     Raises:
         ValueError: If ticker is empty.
@@ -120,6 +122,7 @@ class TickerSummary:
     currency: str = "USD"
     zscore: float | None = None
     zscore_alert: bool = False
+    review_level: ReviewLevel = ReviewLevel.NONE
 
     def __post_init__(self) -> None:
         if not self.ticker or not self.ticker.strip():
@@ -134,6 +137,7 @@ class TickerSummary:
             or self.bounce_alert
             or self.ath_updated
             or self.zscore_alert
+            or self.review_level != ReviewLevel.NONE
         )
 
 
@@ -176,6 +180,7 @@ def _format_ticker_section(summary: TickerSummary) -> str:
 
     lines: list[str] = []
     lines.append(f"{summary.ticker} ({summary.name})")
+    lines.append(f"검토 단계: {summary.review_level.value}")
     lines.append(f"상태: {' '.join(status_parts)}")
 
     # Price / ATH line

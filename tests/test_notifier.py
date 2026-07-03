@@ -8,6 +8,7 @@ import pytest
 import requests
 
 from peakguard.errors import FetchFailureCause, NotificationError
+from peakguard.mdd_calc import ReviewLevel
 from peakguard.notifier import (
     FetchErrorData,
     HealthStatus,
@@ -351,6 +352,26 @@ class TestTickerSummary:
 
         assert summary.has_alert is True
 
+    def test_has_alert_true_when_review_level_requires_attention(self) -> None:
+        """A policy-driven thesis review is reportable without a price flag."""
+        summary = TickerSummary(
+            ticker="AMZN",
+            name="Amazon",
+            current_price=100.0,
+            ath=100.0,
+            mdd_pct=None,
+            days_since_ath=None,
+            days_since_ath_limit=None,
+            bounce_pct=None,
+            mdd_alert=False,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+            review_level=ReviewLevel.THESIS_CHECK,
+        )
+
+        assert summary.has_alert is True
+
     def test_optional_fields_accept_none(self) -> None:
         """Optional fields (mdd_pct, days_since_ath, etc.) accept None."""
         summary = TickerSummary(
@@ -613,6 +634,45 @@ class TestFormatDailySummary:
 
         assert "Z-score 경고" in result
         assert "Z-score: -2.5300" in result
+
+    @pytest.mark.parametrize(
+        "level",
+        [
+            ReviewLevel.WATCH,
+            ReviewLevel.ATTRACTIVE,
+            ReviewLevel.DEEP_DISCOUNT,
+            ReviewLevel.THESIS_CHECK,
+            ReviewLevel.RECOVERY_WATCH,
+        ],
+    )
+    def test_review_level_precedes_raw_metrics(self, level: ReviewLevel) -> None:
+        """The review state leads each reportable ticker section."""
+        summaries = [
+            TickerSummary(
+                ticker="AMZN",
+                name="Amazon",
+                current_price=80.0,
+                ath=140.0,
+                mdd_pct=42.86,
+                days_since_ath=30,
+                days_since_ath_limit=180,
+                bounce_pct=0.0,
+                mdd_alert=True,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+                zscore=-2.53,
+                zscore_alert=True,
+                review_level=level,
+            )
+        ]
+
+        result = format_daily_summary(summaries, date(2026, 3, 7))
+
+        level_line = f"검토 단계: {level.value}"
+        assert level_line in result
+        assert result.index(level_line) < result.index("현재가 / 최고가")
+        assert "buy" not in result.lower()
 
     def test_non_alert_zscore_is_context_for_another_alert(self) -> None:
         """Reportable tickers show Z-score even when it did not breach."""
