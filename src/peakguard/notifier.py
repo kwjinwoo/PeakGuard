@@ -9,6 +9,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import date
+from enum import Enum
 
 import requests
 
@@ -16,6 +17,8 @@ from peakguard.errors import FetchFailureCause, NotificationError
 
 __all__ = [
     "FetchErrorData",
+    "HealthStatus",
+    "RunHealth",
     "TickerSummary",
     "format_daily_summary",
     "send_daily_summary",
@@ -25,6 +28,54 @@ logger = logging.getLogger(__name__)
 
 _TELEGRAM_API_URL = "https://api.telegram.org/bot{token}/sendMessage"
 _REQUEST_TIMEOUT_SECONDS = 10
+
+
+class HealthStatus(Enum):
+    """Status of one external operation in the daily pipeline."""
+
+    SUCCEEDED = "succeeded"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    NOT_ATTEMPTED = "not attempted"
+
+
+@dataclass(frozen=True)
+class RunHealth:
+    """Immutable health facts for one daily PeakGuard execution.
+
+    Attributes:
+        fetch_succeeded: Number of assets whose price fetch completed.
+        fetch_failed: Number of assets whose price fetch failed.
+        gist_read: Outcome of loading persisted history.
+        gist_write: Outcome of writing updated history.
+        signals_evaluated: Whether any price signals were evaluated.
+        history_modified: Whether remote history was updated successfully.
+
+    Raises:
+        ValueError: If either fetch count is negative.
+    """
+
+    fetch_succeeded: int
+    fetch_failed: int
+    gist_read: HealthStatus
+    gist_write: HealthStatus
+    signals_evaluated: bool
+    history_modified: bool
+
+    def __post_init__(self) -> None:
+        if self.fetch_succeeded < 0 or self.fetch_failed < 0:
+            raise ValueError("fetch counts must be non-negative")
+
+    @property
+    def fetch_status(self) -> HealthStatus:
+        """Derive aggregate price-fetch health from success and failure counts."""
+        if self.fetch_succeeded == 0 and self.fetch_failed == 0:
+            return HealthStatus.NOT_ATTEMPTED
+        if self.fetch_failed == 0:
+            return HealthStatus.SUCCEEDED
+        if self.fetch_succeeded == 0:
+            return HealthStatus.FAILED
+        return HealthStatus.PARTIAL
 
 
 @dataclass(frozen=True)
@@ -152,6 +203,7 @@ def format_daily_summary(
     report_date: date,
     *,
     fetch_errors: list["FetchErrorData"] | None = None,
+    data_health: RunHealth | None = None,
 ) -> str:
     """Build the consolidated daily summary message.
 
@@ -162,6 +214,7 @@ def format_daily_summary(
         summaries: Per-ticker aggregated metrics for the day.
         report_date: The date of the report.
         fetch_errors: Optional list of fetch errors to append.
+        data_health: Optional execution health facts to append.
 
     Returns:
         A formatted summary string ready to send via Telegram.
@@ -171,7 +224,9 @@ def format_daily_summary(
 
     alert_summaries = [s for s in summaries if s.has_alert]
 
-    if not alert_summaries:
+    if data_health is not None and not data_health.signals_evaluated:
+        parts.append("⚠️ 가격 신호를 평가하지 않음")
+    elif not alert_summaries:
         parts.append("✅ 모든 티커 이상 없음")
     else:
         for i, summary in enumerate(alert_summaries):
@@ -182,6 +237,10 @@ def format_daily_summary(
     if fetch_errors:
         parts.append("")
         parts.append(_build_fetch_error_message(fetch_errors))
+
+    if data_health is not None:
+        parts.append("")
+        parts.append(_format_data_health(data_health))
 
     return "\n".join(parts)
 
@@ -209,6 +268,7 @@ def send_daily_summary(
     report_date: date,
     *,
     fetch_errors: list["FetchErrorData"] | None = None,
+    data_health: RunHealth | None = None,
 ) -> None:
     """Send the consolidated daily summary via Telegram.
 
@@ -219,6 +279,7 @@ def send_daily_summary(
         summaries: Per-ticker aggregated metrics for the day.
         report_date: The date of the report.
         fetch_errors: Optional list of fetch errors to include.
+        data_health: Optional execution health facts to include.
 
     Raises:
         ValueError: If Telegram environment variables are missing.
@@ -226,7 +287,12 @@ def send_daily_summary(
     """
     token, chat_id = _get_telegram_config()
     url = _TELEGRAM_API_URL.format(token=token)
-    message = format_daily_summary(summaries, report_date, fetch_errors=fetch_errors)
+    message = format_daily_summary(
+        summaries,
+        report_date,
+        fetch_errors=fetch_errors,
+        data_health=data_health,
+    )
 
     try:
         response = requests.post(
@@ -259,6 +325,30 @@ class FetchErrorData:
     def __post_init__(self) -> None:
         if not self.ticker or not self.ticker.strip():
             raise ValueError("ticker must be a non-empty string")
+
+
+def _format_data_health(health: RunHealth) -> str:
+    """Build the compact data-health section for a daily report.
+
+    Args:
+        health: Execution health facts to format.
+
+    Returns:
+        A human-readable data-health block.
+    """
+    signal_status = "evaluated" if health.signals_evaluated else "not evaluated"
+    history_status = "updated" if health.history_modified else "not modified"
+    return "\n".join(
+        [
+            "Data Health",
+            f"- Price fetch: {health.fetch_status.value} "
+            f"({health.fetch_succeeded} succeeded, {health.fetch_failed} failed)",
+            f"- Gist read: {health.gist_read.value}",
+            f"- Gist write: {health.gist_write.value}",
+            f"- Signals: {signal_status}",
+            f"- Remote history: {history_status}",
+        ]
+    )
 
 
 def _build_fetch_error_message(errors: list[FetchErrorData]) -> str:

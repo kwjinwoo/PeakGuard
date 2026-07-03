@@ -10,10 +10,40 @@ import requests
 from peakguard.errors import FetchFailureCause, NotificationError
 from peakguard.notifier import (
     FetchErrorData,
+    HealthStatus,
+    RunHealth,
     TickerSummary,
     format_daily_summary,
     send_daily_summary,
 )
+
+
+class TestRunHealth:
+    """Tests for immutable daily execution health."""
+
+    def test_derives_partial_fetch_status(self) -> None:
+        health = RunHealth(
+            fetch_succeeded=1,
+            fetch_failed=1,
+            gist_read=HealthStatus.SUCCEEDED,
+            gist_write=HealthStatus.SUCCEEDED,
+            signals_evaluated=True,
+            history_modified=True,
+        )
+
+        assert health.fetch_status == HealthStatus.PARTIAL
+
+    def test_rejects_negative_fetch_count(self) -> None:
+        with pytest.raises(ValueError, match="fetch counts"):
+            RunHealth(
+                fetch_succeeded=-1,
+                fetch_failed=0,
+                gist_read=HealthStatus.SUCCEEDED,
+                gist_write=HealthStatus.SUCCEEDED,
+                signals_evaluated=True,
+                history_modified=True,
+            )
+
 
 # ---------------------------------------------------------------------------
 # FetchErrorData
@@ -365,6 +395,59 @@ class TestFormatDailySummary:
         """Empty list of summaries also shows all-clear."""
         result = format_daily_summary([], date(2026, 3, 7))
         assert "이상 없음" in result
+
+    def test_healthy_run_includes_data_health(self) -> None:
+        health = RunHealth(
+            fetch_succeeded=2,
+            fetch_failed=0,
+            gist_read=HealthStatus.SUCCEEDED,
+            gist_write=HealthStatus.SUCCEEDED,
+            signals_evaluated=True,
+            history_modified=True,
+        )
+
+        result = format_daily_summary([], date(2026, 3, 7), data_health=health)
+
+        assert "Data Health" in result
+        assert "Price fetch: succeeded (2 succeeded, 0 failed)" in result
+        assert "Gist read: succeeded" in result
+        assert "Gist write: succeeded" in result
+        assert "Signals: evaluated" in result
+        assert "Remote history: updated" in result
+
+    def test_partial_fetch_is_not_presented_as_healthy(self) -> None:
+        health = RunHealth(
+            fetch_succeeded=1,
+            fetch_failed=1,
+            gist_read=HealthStatus.SUCCEEDED,
+            gist_write=HealthStatus.SUCCEEDED,
+            signals_evaluated=True,
+            history_modified=True,
+        )
+
+        result = format_daily_summary([], date(2026, 3, 7), data_health=health)
+
+        assert "Price fetch: partial (1 succeeded, 1 failed)" in result
+        assert "Price fetch: succeeded" not in result
+
+    def test_fatal_persistence_health_suppresses_all_clear(self) -> None:
+        health = RunHealth(
+            fetch_succeeded=0,
+            fetch_failed=0,
+            gist_read=HealthStatus.FAILED,
+            gist_write=HealthStatus.NOT_ATTEMPTED,
+            signals_evaluated=False,
+            history_modified=False,
+        )
+
+        result = format_daily_summary([], date(2026, 3, 7), data_health=health)
+
+        assert "가격 신호를 평가하지 않음" in result
+        assert "이상 없음" not in result
+        assert "Gist read: failed" in result
+        assert "Gist write: not attempted" in result
+        assert "Signals: not evaluated" in result
+        assert "Remote history: not modified" in result
 
     def test_mdd_alert_ticker_shows_mdd_section(self) -> None:
         """Ticker with MDD alert shows drawdown info."""
