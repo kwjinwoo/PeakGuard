@@ -6,7 +6,7 @@ status: proposed
 created: 2026-07-02
 related:
   - ../runbooks/gist-history-read-failures.md
-  - ../roadmap/now.md
+  - ../roadmap.md
 code:
   - src/peakguard/main.py
   - src/peakguard/gist_client.py

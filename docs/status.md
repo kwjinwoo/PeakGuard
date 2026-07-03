@@ -9,7 +9,7 @@ verified_by:
   - uv run pre-commit run --all-files
 related:
   - architecture.md
-  - roadmap/README.md
+  - roadmap.md
   - work-notes/README.md
 code:
   - src/peakguard
@@ -44,7 +44,7 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 
 ## Known gaps and concerns
 
-- A Z-score threshold is configured and its calculation exists, but the daily orchestration does not currently add a Z-score signal to `TickerSummary` or the Telegram report. See [Next](roadmap/next.md).
+- A Z-score threshold is configured and its calculation exists, but the daily orchestration does not currently add a Z-score signal to `TickerSummary` or the Telegram report. See [Phase 2](roadmap.md#phase-2--discount-signal-model).
 - `_load_history_from_gist()` treats every `GistError` as an empty first-run state. Authentication, rate-limit, and transient failures can therefore be indistinguishable from a missing history file. See [PROP-0001](proposals/PROP-0001-distinguish-gist-read-failures.md).
 - The README's current tracked-assets table lists only US equities while `portfolio.yaml` also contains Korean ETFs.
 

@@ -36,10 +36,7 @@ This is the complete catalog of durable PeakGuard Wiki documents. `README.md` ex
 
 ## Direction and history
 
-- [Roadmap index](roadmap/README.md)
-- [Now](roadmap/now.md)
-- [Next](roadmap/next.md)
-- [Later](roadmap/later.md)
+- [Product roadmap](roadmap.md)
 - [Proposal index](proposals/README.md)
 - [PROP-0001: Distinguish Gist read failure modes](proposals/PROP-0001-distinguish-gist-read-failures.md)
 - [Decision index](decisions/README.md)

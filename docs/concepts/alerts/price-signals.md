@@ -7,7 +7,7 @@ last_verified: 2026-07-02
 related:
   - README.md
   - ../domain-model.md
-  - ../../roadmap/next.md
+  - ../../roadmap.md
 code:
   - src/peakguard/mdd_calc.py
   - src/peakguard/main.py

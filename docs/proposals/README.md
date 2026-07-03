@@ -5,7 +5,7 @@ type: index
 status: active
 related:
   - PROP-0001-distinguish-gist-read-failures.md
-  - ../roadmap/README.md
+  - ../roadmap.md
   - ../decisions/README.md
 ---
 

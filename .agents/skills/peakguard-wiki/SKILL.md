@@ -31,7 +31,7 @@ Return the smallest sufficient context. Do not load the entire Wiki when a focus
 - Current verified baseline: `docs/status.md`.
 - Current domain or technical knowledge: `docs/concepts/`.
 - Runtime and secret handling: `docs/operations.md`.
-- Near- and long-term direction: `docs/roadmap/`.
+- Product direction, phases, and completion checklist: `docs/roadmap.md`.
 - Unaccepted design ideas: `docs/proposals/`.
 - Accepted architectural rationale: `docs/decisions/`.
 - Repeatable operational recovery: `docs/runbooks/`.
