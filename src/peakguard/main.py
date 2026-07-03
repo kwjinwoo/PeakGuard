@@ -29,6 +29,8 @@ from peakguard.mdd_calc import (
 )
 from peakguard.notifier import (
     FetchErrorData,
+    HealthStatus,
+    RunHealth,
     TickerSummary,
     send_daily_summary,
 )
@@ -87,6 +89,59 @@ def _save_history_to_gist(records: dict[str, list[ClosingPrice]]) -> None:
     write_gist(gist_id=gist_id, filename=_GIST_FILENAME, content=content)
 
 
+def _send_summary_safely(
+    summaries: list[TickerSummary],
+    report_date: date,
+    *,
+    fetch_errors: list[FetchErrorData],
+    data_health: RunHealth,
+) -> None:
+    """Send a daily report without hiding a pipeline result on Telegram failure.
+
+    Args:
+        summaries: Successfully evaluated ticker summaries.
+        report_date: Date shown in the report.
+        fetch_errors: Per-ticker provider failures.
+        data_health: Health facts for the completed or aborted pipeline.
+    """
+    try:
+        send_daily_summary(
+            summaries,
+            report_date,
+            fetch_errors=fetch_errors,
+            data_health=data_health,
+        )
+        logger.info("Daily summary sent successfully")
+    except NotificationError as exc:
+        logger.warning("Failed to send daily summary: %s", exc)
+
+
+def _send_failure_summary_safely(
+    summaries: list[TickerSummary],
+    report_date: date,
+    *,
+    fetch_errors: list[FetchErrorData],
+    data_health: RunHealth,
+) -> None:
+    """Attempt failure reporting without masking the original pipeline error.
+
+    Args:
+        summaries: Successfully evaluated ticker summaries, if any.
+        report_date: Date shown in the report.
+        fetch_errors: Per-ticker provider failures.
+        data_health: Health facts for the aborted pipeline.
+    """
+    try:
+        _send_summary_safely(
+            summaries,
+            report_date,
+            fetch_errors=fetch_errors,
+            data_health=data_health,
+        )
+    except ValueError as exc:
+        logger.warning("Cannot send failure summary: %s", exc)
+
+
 def run() -> None:
     """Execute the daily MDD check pipeline with consolidated summary.
 
@@ -98,12 +153,31 @@ def run() -> None:
            b. Otherwise fetch today's price and append to history.
            c. Compute rolling ATH, drawdown, and metric alerts.
            d. Build a TickerSummary for the consolidated report.
-        4. Send a single consolidated daily summary via Telegram.
-        5. Save updated history back to Gist.
+        4. Save updated history back to Gist.
+        5. Send one summary including the final data-health outcome.
+
+    Raises:
+        GistError: If history cannot be read or the updated history cannot be saved.
     """
     configs = load_portfolio(_CONFIG_PATH)
     alert_limits = load_alert_thresholds(_CONFIG_PATH)
-    history = _load_history_from_gist()
+    try:
+        history = _load_history_from_gist()
+    except GistError:
+        _send_failure_summary_safely(
+            [],
+            date.today(),
+            fetch_errors=[],
+            data_health=RunHealth(
+                fetch_succeeded=0,
+                fetch_failed=0,
+                gist_read=HealthStatus.FAILED,
+                gist_write=HealthStatus.NOT_ATTEMPTED,
+                signals_evaluated=False,
+                history_modified=False,
+            ),
+        )
+        raise
     fetch_errors: list[FetchErrorData] = []
     summaries: list[TickerSummary] = []
     reference_date: date | None = None
@@ -223,10 +297,34 @@ def run() -> None:
         reference_date = date.today()
 
     try:
-        send_daily_summary(summaries, reference_date, fetch_errors=fetch_errors)
-        logger.info("Daily summary sent successfully")
-    except NotificationError as exc:
-        logger.warning("Failed to send daily summary: %s", exc)
+        _save_history_to_gist(history)
+    except GistError:
+        _send_failure_summary_safely(
+            summaries,
+            reference_date,
+            fetch_errors=fetch_errors,
+            data_health=RunHealth(
+                fetch_succeeded=len(summaries),
+                fetch_failed=len(fetch_errors),
+                gist_read=HealthStatus.SUCCEEDED,
+                gist_write=HealthStatus.FAILED,
+                signals_evaluated=bool(summaries),
+                history_modified=False,
+            ),
+        )
+        raise
 
-    _save_history_to_gist(history)
     logger.info("History records updated successfully")
+    _send_summary_safely(
+        summaries,
+        reference_date,
+        fetch_errors=fetch_errors,
+        data_health=RunHealth(
+            fetch_succeeded=len(summaries),
+            fetch_failed=len(fetch_errors),
+            gist_read=HealthStatus.SUCCEEDED,
+            gist_write=HealthStatus.SUCCEEDED,
+            signals_evaluated=bool(summaries),
+            history_modified=True,
+        ),
+    )

@@ -14,7 +14,12 @@ from peakguard.errors import (
     NotificationError,
 )
 from peakguard.fetcher import PriceResult
-from peakguard.notifier import FetchErrorData, TickerSummary
+from peakguard.notifier import (
+    FetchErrorData,
+    HealthStatus,
+    RunHealth,
+    TickerSummary,
+)
 from peakguard.storage import ClosingPrice
 
 
@@ -333,6 +338,10 @@ class TestRun:
         errors = call_kwargs.get("fetch_errors", [])
         assert len(errors) == 1
         assert errors[0].ticker == "AMZN"
+        health = call_kwargs["data_health"]
+        assert health.fetch_status == HealthStatus.PARTIAL
+        assert health.fetch_succeeded == 1
+        assert health.fetch_failed == 1
         mock_write_gist.assert_called_once()
 
     @patch("peakguard.main.write_gist")
@@ -429,7 +438,18 @@ class TestRun:
         assert exc_info.value.cause == cause
         mock_fetch_history.assert_not_called()
         mock_fetch_price.assert_not_called()
-        mock_send_summary.assert_not_called()
+        mock_send_summary.assert_called_once()
+        summaries, _report_date = mock_send_summary.call_args.args
+        health = mock_send_summary.call_args.kwargs["data_health"]
+        assert summaries == []
+        assert health == RunHealth(
+            fetch_succeeded=0,
+            fetch_failed=0,
+            gist_read=HealthStatus.FAILED,
+            gist_write=HealthStatus.NOT_ATTEMPTED,
+            signals_evaluated=False,
+            history_modified=False,
+        )
         mock_write_gist.assert_not_called()
 
     def test_malformed_csv_stops_before_evaluation_or_write(
@@ -452,8 +472,110 @@ class TestRun:
         assert exc_info.value.cause == GistFailureCause.MALFORMED_HISTORY
         mock_fetch_history.assert_not_called()
         mock_fetch_price.assert_not_called()
-        mock_send_summary.assert_not_called()
+        mock_send_summary.assert_called_once()
+        health = mock_send_summary.call_args.kwargs["data_health"]
+        assert health.gist_read == HealthStatus.FAILED
+        assert health.signals_evaluated is False
+        assert health.history_modified is False
         mock_write_gist.assert_not_called()
+
+    def test_gist_write_failure_is_reported_then_propagated(
+        self, mocker, sample_configs: list[TickerConfig]
+    ) -> None:
+        """A failed write produces health reporting and still fails the run."""
+        mocker.patch("peakguard.main.load_portfolio", return_value=sample_configs)
+        mocker.patch(
+            "peakguard.main.load_alert_thresholds",
+            return_value=AlertThresholds(
+                days_since_ath_limit=180,
+                zscore_threshold=-2.0,
+                bounce_from_bottom_min=3.0,
+            ),
+        )
+        mocker.patch("peakguard.main.read_gist", return_value=_HISTORY_CSV)
+        mocker.patch(
+            "peakguard.main.fetch_price",
+            side_effect=[
+                PriceResult(ticker="AMZN", price=490.0, fetched_at=date(2026, 3, 6)),
+                PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
+            ],
+        )
+        events: list[str] = []
+        write_error = GistError(
+            message="write unavailable", cause=GistFailureCause.NETWORK
+        )
+
+        def fail_write(**_kwargs) -> None:
+            events.append("write")
+            raise write_error
+
+        mock_write_gist = mocker.patch(
+            "peakguard.main.write_gist",
+            side_effect=fail_write,
+        )
+        mock_send_summary = mocker.patch(
+            "peakguard.main.send_daily_summary",
+            side_effect=lambda *_args, **_kwargs: events.append("notify"),
+        )
+
+        from peakguard.main import run
+
+        with pytest.raises(GistError) as exc_info:
+            run()
+
+        assert exc_info.value is write_error
+        assert events == ["write", "notify"]
+        mock_write_gist.assert_called_once()
+        health = mock_send_summary.call_args.kwargs["data_health"]
+        assert health.gist_read == HealthStatus.SUCCEEDED
+        assert health.gist_write == HealthStatus.FAILED
+        assert health.signals_evaluated is True
+        assert health.history_modified is False
+
+    def test_healthy_run_reports_complete_data_health(
+        self, mocker, sample_configs: list[TickerConfig]
+    ) -> None:
+        """A fully successful run reports fetch, read, write, and signal health."""
+        mocker.patch("peakguard.main.load_portfolio", return_value=sample_configs)
+        mocker.patch(
+            "peakguard.main.load_alert_thresholds",
+            return_value=AlertThresholds(
+                days_since_ath_limit=180,
+                zscore_threshold=-2.0,
+                bounce_from_bottom_min=3.0,
+            ),
+        )
+        mocker.patch("peakguard.main.read_gist", return_value=_HISTORY_CSV)
+        mocker.patch(
+            "peakguard.main.fetch_price",
+            side_effect=[
+                PriceResult(ticker="AMZN", price=490.0, fetched_at=date(2026, 3, 6)),
+                PriceResult(ticker="MSFT", price=395.0, fetched_at=date(2026, 3, 6)),
+            ],
+        )
+        events: list[str] = []
+        mocker.patch(
+            "peakguard.main.write_gist",
+            side_effect=lambda **_kwargs: events.append("write"),
+        )
+        mock_send_summary = mocker.patch(
+            "peakguard.main.send_daily_summary",
+            side_effect=lambda *_args, **_kwargs: events.append("notify"),
+        )
+
+        from peakguard.main import run
+
+        run()
+
+        assert events == ["write", "notify"]
+        assert mock_send_summary.call_args.kwargs["data_health"] == RunHealth(
+            fetch_succeeded=2,
+            fetch_failed=0,
+            gist_read=HealthStatus.SUCCEEDED,
+            gist_write=HealthStatus.SUCCEEDED,
+            signals_evaluated=True,
+            history_modified=True,
+        )
 
     @patch("peakguard.main.write_gist")
     @patch("peakguard.main.send_daily_summary")
