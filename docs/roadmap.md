@@ -6,6 +6,7 @@ status: active
 related:
   - status.md
   - proposals/PROP-0001-distinguish-gist-read-failures.md
+  - proposals/PROP-0003-portfotrack-context-mvp.md
   - concepts/alerts/README.md
   - decisions/README.md
 ---
@@ -121,23 +122,25 @@ Objective: stop treating every ticker as the same kind of asset.
 
 ### Asset-centric configuration
 
-- [ ] Design a migration from `tickers` to an asset-oriented configuration model.
-- [ ] Add `asset_type`, `portfolio_group`, and `thesis_required` where appropriate.
+- [ ] Preserve the existing `tickers` mapping and extend entries with optional asset metadata.
+- [ ] Add `asset_type`, `portfolio_group`, and `thesis_required` without breaking price-only configurations.
 - [ ] Support `proxy_for` when a tracked market symbol represents a held asset.
-- [ ] Preserve a clear validation and migration path for existing configuration.
+- [ ] Validate optional field types, enum values, and incompatible combinations clearly.
 
-### Asset types and defaults
+### MVP asset types
 
-- [ ] Define types for individual stocks, high-volatility stocks, core equity ETFs, bond ETFs, gold proxies, and Korean-listed ETFs.
-- [ ] Add type-specific drawdown and Z-score defaults.
-- [ ] Allow per-asset overrides without duplicating all defaults.
-- [ ] Test inheritance, overrides, and invalid combinations.
+- [ ] Define `individual_stock`, `core_etf`, `bond_etf`, and `gold_proxy`.
+- [ ] Configure individual stocks with explicit thesis policy where appropriate.
+- [ ] Keep existing per-ticker MDD thresholds and the global Z-score threshold for the MVP.
+- [ ] Test legacy entries, optional metadata, proxy mappings, and invalid combinations.
 - [ ] Use asset-appropriate report language.
+
+Type-specific threshold inheritance and a full `tickers`-to-`assets` migration are deferred until the MVP proves they are necessary.
 
 ### Completion criteria
 
-- [ ] The configuration describes asset meaning, not only provider ticker symbols.
-- [ ] Stocks and ETFs can use materially different review thresholds.
+- [ ] Configured metadata describes asset meaning while legacy ticker-only entries remain valid.
+- [ ] Stocks, ETFs, bonds, and gold can receive different review language.
 - [ ] README examples and configured assets describe the same monitored universe.
 
 ## Phase 4 — Portfolio-aware alerts
@@ -146,25 +149,39 @@ Objective: combine PeakGuard price signals with PortfoTrack allocation context w
 
 ### PortfoTrack boundary
 
-- [ ] Define a versioned, read-only snapshot contract for valuation date, total assets, group weights, target ranges, and asset weights.
+- [ ] Define `schema_version: 1` for a read-only JSON snapshot containing `as_of`, currency, total assets, and asset-class weights and bounds.
+- [ ] Load optional `config/portfotrack_context.json` into immutable validated objects.
 - [ ] Keep PeakGuard functional when no portfolio snapshot is supplied.
-- [ ] Validate snapshot freshness and reject malformed or incompatible data safely.
+- [ ] Fail clearly when an existing snapshot is malformed, unsupported, or internally inconsistent.
+- [ ] Treat context age 0–7 days as current and 8–30 days as stale with a warning.
+- [ ] Disable allocation guidance at 31 or more days old while preserving price-only alerts.
 - [ ] Keep portfolio calculation ownership in PortfoTrack rather than duplicating it in PeakGuard.
 
-### Mapping and guardrails
+### Mapping and classification
 
-- [ ] Map tracked assets and proxies to portfolio groups.
-- [ ] Increase review priority when a group is below its lower bound.
-- [ ] Use normal review priority when allocation is in range.
-- [ ] Apply watch-only language when a group is above its upper bound.
-- [ ] Add no-buy guardrails for individual asset or group allocation limits.
-- [ ] Calculate approximate available room when sufficient snapshot data exists.
+- [ ] Resolve optional ticker and proxy mappings to PortfoTrack asset-class names.
+- [ ] Preserve price-only behavior for missing mappings and unknown groups.
+- [ ] Keep price-derived `ReviewLevel` separate from portfolio-derived `PortfolioAction`.
+- [ ] Classify below-range ETF proxies as `REBALANCE_CANDIDATE` and other discounted assets as `ACTION_REVIEW`.
+- [ ] Classify within-range discounted assets as `WATCH`.
+- [ ] Classify above-range assets as `NO_ADD`, overriding attractive-price wording.
+- [ ] Classify deep-discount individual stocks with explicit thesis policy as `THESIS_CHECK`.
+
+Approximate available-room and rebalance-amount calculations are deferred; PeakGuard reports PortfoTrack allocation facts without becoming a rebalancing engine.
+
+### Reporting and tests
+
+- [ ] Show portfolio group, current weight, target range, status, action, and stale warning separately from price metrics.
+- [ ] Use thesis language for individual stocks and rebalance language for ETF proxies.
+- [ ] Test valid, missing, malformed, unsupported-version, unknown-group, and stale context paths.
+- [ ] Test `below_range`, `within_range`, and `above_range` action classification.
+- [ ] Keep all provider, Telegram, and Gist calls mocked.
 
 ### Completion criteria
 
 - [ ] Price attractiveness and allocation room are shown as separate facts.
 - [ ] Allocation guardrails override attractive-price wording.
-- [ ] Individual-stock prompts require thesis review.
+- [ ] Deep-discount individual-stock prompts with thesis policy require thesis review.
 - [ ] ETF prompts use rebalance-oriented language.
 
 ## Phase 5 — Reporting and UX

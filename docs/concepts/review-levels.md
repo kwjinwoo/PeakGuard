@@ -7,6 +7,7 @@ last_verified: 2026-07-04
 related:
   - alerts/price-signals.md
   - ../decisions/0003-discount-review-level-precedence.md
+  - ../decisions/0004-separate-price-levels-from-portfolio-actions.md
   - ../roadmap.md
 code:
   - src/peakguard/mdd_calc.py
@@ -39,6 +40,8 @@ Bounce never overrides an active MDD or Z-score condition. Existing inclusive MD
 ## Thesis policy
 
 `THESIS_CHECK` requires `thesis_check_required=True` and overrides every price-derived state. Daily orchestration does not infer this input from price behavior. It remains false until asset taxonomy or another explicit policy source can identify assets that require thesis review.
+
+Portfolio-aware classification remains a separate layer. Future `PortfolioAction.THESIS_CHECK` combines explicit individual-stock thesis policy with `DEEP_DISCOUNT`; it does not change the price-derived `ReviewLevel`. See [ADR-0004](../decisions/0004-separate-price-levels-from-portfolio-actions.md).
 
 ## Missing Z-score
 

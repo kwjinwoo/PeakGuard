@@ -41,10 +41,12 @@ This is the complete catalog of durable PeakGuard Wiki documents. `README.md` ex
 - [Proposal index](proposals/README.md)
 - [PROP-0001: Distinguish Gist read failure modes](proposals/PROP-0001-distinguish-gist-read-failures.md)
 - [PROP-0002: Define discount review levels](proposals/PROP-0002-define-discount-review-levels.md)
+- [PROP-0003: PortfoTrack context MVP](proposals/PROP-0003-portfotrack-context-mvp.md)
 - [Decision index](decisions/README.md)
 - [ADR-0001: CSV in a GitHub Gist](decisions/0001-csv-gist-persistence.md)
 - [ADR-0002: Fail closed on Gist history read errors](decisions/0002-fail-closed-on-gist-read-errors.md)
 - [ADR-0003: Discount review level precedence](decisions/0003-discount-review-level-precedence.md)
+- [ADR-0004: Separate price levels from portfolio actions](decisions/0004-separate-price-levels-from-portfolio-actions.md)
 
 ## Operations and learned context
 
