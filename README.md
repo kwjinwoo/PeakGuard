@@ -57,6 +57,9 @@ tickers:
   NVDA:
     name: "Nvidia"
     threshold: 15.0   # MDD alert fires when drawdown >= 15%
+    asset_type: individual_stock
+    portfolio_group: "US Equity"
+    thesis_required: true
 
 alert_thresholds:
   days_since_ath_limit: 180     # alert if ATH not refreshed for 180+ days
@@ -73,6 +76,8 @@ alert_thresholds:
 | `META` | Meta |
 | `NVDA` | Nvidia |
 | `GOOGL` | Google |
+| `360750.KS` | TIGER 미국S&P500 |
+| `133690.KS` | TIGER 미국나스닥100 |
 
 ---
 

@@ -6,28 +6,47 @@ tickers:
   AMZN:
     name: "Amazon"
     threshold: 15.0
+    asset_type: individual_stock
+    portfolio_group: "US Equity"
+    thesis_required: true
   MSFT:
     name: "Microsoft"
     threshold: 15.0
+    asset_type: individual_stock
+    portfolio_group: "US Equity"
+    thesis_required: true
   META:
     name: "Meta"
     threshold: 15.0
+    asset_type: individual_stock
+    portfolio_group: "US Equity"
+    thesis_required: true
   NVDA:
     name: "Nvidia"
     threshold: 15.0
+    asset_type: individual_stock
+    portfolio_group: "US Equity"
+    thesis_required: true
   GOOGL:
     name: "Google"
     threshold: 15.0
+    asset_type: individual_stock
+    portfolio_group: "US Equity"
+    thesis_required: true
 
   # Korean ETFs (KRX)
   "360750.KS":
     name: "TIGER 미국S&P500"
     threshold: 15.0
     currency: KRW
+    asset_type: core_etf
+    portfolio_group: "US Equity"
   "133690.KS":
     name: "TIGER 미국나스닥100"
     threshold: 15.0
     currency: KRW
+    asset_type: core_etf
+    portfolio_group: "US Equity"
 
 # Global alert thresholds for conditional metric alerts
 alert_thresholds:

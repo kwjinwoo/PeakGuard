@@ -28,7 +28,7 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - The pipeline reads and writes `peak_prices.csv` in a GitHub Gist.
 - Portfolio and alert limits are loaded from `config/portfolio.yaml`.
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
-- Tests: **273 passed** on 2026-07-04.
+- Tests: **285 passed** on 2026-07-04.
 - Pre-commit: all configured hooks passed on 2026-07-04.
 
 ## Implemented capabilities
@@ -47,10 +47,12 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Inclusive configured Z-score alerts in daily orchestration, with safe unavailable handling for insufficient or zero-variance history.
 - Deterministic discount review levels derived from MDD, Z-score, and bounce, shown before supporting metrics.
 - Explicit `THESIS_CHECK` precedence reserved for a future non-price asset policy input.
+- Backward-compatible optional asset metadata with validated asset types, portfolio
+  groups, thesis policy, and proxy mappings.
 
 ## Known gaps and concerns
 
-- The README's current tracked-assets table lists only US equities while `portfolio.yaml` also contains Korean ETFs.
+- Asset metadata is loaded and validated but does not yet affect report language.
 
 ## Update rule
 

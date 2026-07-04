@@ -6,6 +6,7 @@ import pytest
 
 from peakguard.config import (
     AlertThresholds,
+    AssetType,
     TickerConfig,
     load_alert_thresholds,
     load_portfolio,
@@ -59,6 +60,65 @@ class TestTickerConfig:
             currency="KRW",
         )
         assert cfg.currency == "KRW"
+
+    def test_optional_asset_metadata_defaults_to_price_only(self) -> None:
+        cfg = TickerConfig(ticker="SPY", name="S&P 500 ETF", threshold=10.0)
+
+        assert cfg.asset_type is None
+        assert cfg.portfolio_group is None
+        assert cfg.thesis_required is False
+        assert cfg.proxy_for is None
+
+    def test_valid_asset_metadata(self) -> None:
+        cfg = TickerConfig(
+            ticker="AAPL",
+            name="Apple",
+            threshold=15.0,
+            asset_type=AssetType.INDIVIDUAL_STOCK,
+            portfolio_group="US Equity",
+            thesis_required=True,
+            proxy_for="Apple position",
+        )
+
+        assert cfg.asset_type is AssetType.INDIVIDUAL_STOCK
+        assert cfg.portfolio_group == "US Equity"
+        assert cfg.thesis_required is True
+        assert cfg.proxy_for == "Apple position"
+
+    @pytest.mark.parametrize("field", ["portfolio_group", "proxy_for"])
+    def test_rejects_blank_optional_string(self, field: str) -> None:
+        kwargs = {field: "   "}
+
+        with pytest.raises(ValueError, match=field):
+            TickerConfig(ticker="SPY", name="Test", threshold=10.0, **kwargs)
+
+    def test_rejects_non_boolean_thesis_required(self) -> None:
+        with pytest.raises(TypeError, match="thesis_required"):
+            TickerConfig(
+                ticker="AAPL",
+                name="Apple",
+                threshold=15.0,
+                thesis_required="true",  # type: ignore[arg-type]
+            )
+
+    def test_rejects_thesis_policy_for_non_stock(self) -> None:
+        with pytest.raises(ValueError, match="individual_stock"):
+            TickerConfig(
+                ticker="SPY",
+                name="S&P 500 ETF",
+                threshold=10.0,
+                asset_type=AssetType.CORE_ETF,
+                thesis_required=True,
+            )
+
+    def test_rejects_proxy_self_reference(self) -> None:
+        with pytest.raises(ValueError, match="proxy_for"):
+            TickerConfig(
+                ticker="SPY",
+                name="S&P 500 ETF",
+                threshold=10.0,
+                proxy_for="SPY",
+            )
 
 
 class TestLoadPortfolio:
@@ -144,6 +204,52 @@ class TestLoadPortfolio:
         result = load_portfolio(config_file)
 
         assert result[0].currency == "USD"
+
+    def test_loads_optional_asset_metadata(self, tmp_path: Path) -> None:
+        yaml_content = (
+            "tickers:\n"
+            "  AAPL:\n"
+            '    name: "Apple"\n'
+            "    threshold: 15.0\n"
+            "    asset_type: individual_stock\n"
+            '    portfolio_group: "US Equity"\n'
+            "    thesis_required: true\n"
+            '    proxy_for: "Apple position"\n'
+        )
+        config_file = tmp_path / "portfolio.yaml"
+        config_file.write_text(yaml_content)
+
+        result = load_portfolio(config_file)
+
+        assert result[0].asset_type is AssetType.INDIVIDUAL_STOCK
+        assert result[0].portfolio_group == "US Equity"
+        assert result[0].thesis_required is True
+        assert result[0].proxy_for == "Apple position"
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("asset_type", "crypto"),
+            ("portfolio_group", "42"),
+            ("thesis_required", '"true"'),
+            ("proxy_for", "42"),
+        ],
+    )
+    def test_rejects_invalid_asset_metadata(
+        self, tmp_path: Path, field: str, value: str
+    ) -> None:
+        yaml_content = (
+            "tickers:\n"
+            "  SPY:\n"
+            "    name: Test\n"
+            "    threshold: 10.0\n"
+            f"    {field}: {value}\n"
+        )
+        config_file = tmp_path / "bad.yaml"
+        config_file.write_text(yaml_content)
+
+        with pytest.raises((TypeError, ValueError), match=field):
+            load_portfolio(config_file)
 
     def test_load_default_portfolio_yaml(self) -> None:
         """Integration: load the actual config/portfolio.yaml."""

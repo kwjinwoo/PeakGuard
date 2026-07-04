@@ -5,11 +5,27 @@ which tickers to track and their MDD alert thresholds.
 """
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import yaml
 
-__all__ = ["AlertThresholds", "TickerConfig", "load_alert_thresholds", "load_portfolio"]
+__all__ = [
+    "AlertThresholds",
+    "AssetType",
+    "TickerConfig",
+    "load_alert_thresholds",
+    "load_portfolio",
+]
+
+
+class AssetType(StrEnum):
+    """Supported asset categories for asset-appropriate review behavior."""
+
+    INDIVIDUAL_STOCK = "individual_stock"
+    CORE_ETF = "core_etf"
+    BOND_ETF = "bond_etf"
+    GOLD_PROXY = "gold_proxy"
 
 
 @dataclass(frozen=True)
@@ -21,15 +37,24 @@ class TickerConfig:
         name: A human-readable name for the asset.
         threshold: The MDD alert threshold percentage (0 < threshold <= 100).
         currency: The currency code for price display (default: "USD").
+        asset_type: Optional category used for asset-appropriate review behavior.
+        portfolio_group: Optional PortfoTrack allocation group name.
+        thesis_required: Whether deep discounts require an explicit thesis review.
+        proxy_for: Optional held-asset name represented by this market ticker.
 
     Raises:
-        ValueError: If ticker is empty or threshold is out of range.
+        TypeError: If optional metadata has an invalid type.
+        ValueError: If a value is empty, out of range, or incompatible.
     """
 
     ticker: str
     name: str
     threshold: float
     currency: str = "USD"
+    asset_type: AssetType | None = None
+    portfolio_group: str | None = None
+    thesis_required: bool = False
+    proxy_for: str | None = None
 
     def __post_init__(self) -> None:
         if not self.ticker or not self.ticker.strip():
@@ -38,6 +63,35 @@ class TickerConfig:
             raise ValueError(
                 f"threshold must be in the range (0, 100], got {self.threshold}"
             )
+        if self.asset_type is not None and not isinstance(self.asset_type, AssetType):
+            raise TypeError("asset_type must be an AssetType or None")
+        self._validate_optional_string("portfolio_group", self.portfolio_group)
+        self._validate_optional_string("proxy_for", self.proxy_for)
+        if not isinstance(self.thesis_required, bool):
+            raise TypeError("thesis_required must be a boolean")
+        if self.thesis_required and self.asset_type is not AssetType.INDIVIDUAL_STOCK:
+            raise ValueError(
+                "thesis_required can be true only for asset_type individual_stock"
+            )
+        if self.proxy_for == self.ticker:
+            raise ValueError("proxy_for must not reference the ticker itself")
+
+    @staticmethod
+    def _validate_optional_string(field: str, value: str | None) -> None:
+        """Validate an optional non-empty string metadata field.
+
+        Args:
+            field: Configuration field name used in error messages.
+            value: Optional value to validate.
+
+        Raises:
+            TypeError: If the value is neither a string nor ``None``.
+            ValueError: If the value is a blank string.
+        """
+        if value is not None and not isinstance(value, str):
+            raise TypeError(f"{field} must be a string or None")
+        if isinstance(value, str) and not value.strip():
+            raise ValueError(f"{field} must not be blank")
 
 
 @dataclass(frozen=True)
@@ -108,12 +162,30 @@ def load_portfolio(path: Path) -> list[TickerConfig]:
         if "threshold" not in entry:
             raise ValueError(f"Missing 'threshold' for ticker '{ticker}'")
 
+        raw_asset_type = entry.get("asset_type")
+        if raw_asset_type is not None and not isinstance(raw_asset_type, str):
+            raise TypeError(f"asset_type for ticker '{ticker}' must be a string")
+        try:
+            asset_type = (
+                AssetType(raw_asset_type) if raw_asset_type is not None else None
+            )
+        except ValueError as exc:
+            allowed = ", ".join(asset.value for asset in AssetType)
+            raise ValueError(
+                f"Invalid asset_type for ticker '{ticker}': {raw_asset_type!r}; "
+                f"expected one of {allowed}"
+            ) from exc
+
         configs.append(
             TickerConfig(
                 ticker=ticker,
                 name=entry["name"],
                 threshold=float(entry["threshold"]),
                 currency=entry.get("currency", "USD"),
+                asset_type=asset_type,
+                portfolio_group=entry.get("portfolio_group"),
+                thesis_required=entry.get("thesis_required", False),
+                proxy_for=entry.get("proxy_for"),
             )
         )
 

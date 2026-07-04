@@ -26,12 +26,20 @@ tickers:
     name: "Nvidia"
     threshold: 15.0
     currency: USD
+    asset_type: individual_stock
+    portfolio_group: "US Equity"
+    thesis_required: true
 ```
 
 - The mapping key is the yfinance ticker symbol.
 - `name` is required and used in reports.
 - `threshold` is required and must be in `(0, 100]`.
 - `currency` is optional and defaults to `USD`; current formatting explicitly handles `KRW` and otherwise uses the USD format.
+- `asset_type` is optional and accepts `individual_stock`, `core_etf`, `bond_etf`, or `gold_proxy`.
+- `portfolio_group` optionally maps the asset to a PortfoTrack allocation group.
+- `thesis_required` defaults to `false`; only an `individual_stock` may enable it.
+- `proxy_for` optionally names a held asset represented by the tracked market symbol and cannot equal the ticker itself.
+- Optional string metadata must be non-blank. Omitting all asset metadata preserves legacy price-only behavior.
 
 ## Global alert thresholds
 

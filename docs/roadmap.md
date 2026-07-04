@@ -122,17 +122,17 @@ Objective: stop treating every ticker as the same kind of asset.
 
 ### Asset-centric configuration
 
-- [ ] Preserve the existing `tickers` mapping and extend entries with optional asset metadata.
-- [ ] Add `asset_type`, `portfolio_group`, and `thesis_required` without breaking price-only configurations.
-- [ ] Support `proxy_for` when a tracked market symbol represents a held asset.
-- [ ] Validate optional field types, enum values, and incompatible combinations clearly.
+- [x] Preserve the existing `tickers` mapping and extend entries with optional asset metadata.
+- [x] Add `asset_type`, `portfolio_group`, and `thesis_required` without breaking price-only configurations.
+- [x] Support `proxy_for` when a tracked market symbol represents a held asset.
+- [x] Validate optional field types, enum values, and incompatible combinations clearly.
 
 ### MVP asset types
 
-- [ ] Define `individual_stock`, `core_etf`, `bond_etf`, and `gold_proxy`.
-- [ ] Configure individual stocks with explicit thesis policy where appropriate.
-- [ ] Keep existing per-ticker MDD thresholds and the global Z-score threshold for the MVP.
-- [ ] Test legacy entries, optional metadata, proxy mappings, and invalid combinations.
+- [x] Define `individual_stock`, `core_etf`, `bond_etf`, and `gold_proxy`.
+- [x] Configure individual stocks with explicit thesis policy where appropriate.
+- [x] Keep existing per-ticker MDD thresholds and the global Z-score threshold for the MVP.
+- [x] Test legacy entries, optional metadata, proxy mappings, and invalid combinations.
 - [ ] Use asset-appropriate report language.
 
 Type-specific threshold inheritance and a full `tickers`-to-`assets` migration are deferred until the MVP proves they are necessary.
