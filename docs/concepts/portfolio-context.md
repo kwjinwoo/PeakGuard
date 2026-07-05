@@ -72,5 +72,20 @@ incorrectly typed fields, duplicate or unsorted IDs, invalid bounds, status or d
 disagreement, total-amount disagreement, and inconsistent current or target weight
 totals. Loaded group mappings are immutable.
 
-Age policy and portfolio-action classification are later Phase 4 steps. Loading this
-contract alone does not change daily report behavior.
+## Freshness policy
+
+Daily orchestration loads the optional file before any Gist, provider, or Telegram
+call and classifies age from `snapshot.date` against the run date:
+
+| Age | State | Allocation guidance |
+| ---: | --- | --- |
+| 0–7 days | `CURRENT` | Eligible |
+| 8–30 days | `STALE` | Eligible only with a stale-data warning |
+| 31+ days | `EXPIRED` | Disabled; price-only behavior remains |
+
+A future snapshot date is invalid. A missing file preserves price-only operation.
+Existing malformed, unsupported, or internally inconsistent files fail before
+external calls rather than being silently ignored.
+
+Portfolio-action classification is a later Phase 4 step. The current orchestration
+loads and classifies context but does not yet add allocation facts to reports.

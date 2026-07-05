@@ -28,7 +28,7 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - The pipeline reads and writes `peak_prices.csv` in a GitHub Gist.
 - Portfolio and alert limits are loaded from `config/portfolio.yaml`.
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
-- Tests: **310 passed** on 2026-07-06.
+- Tests: **317 passed** on 2026-07-06.
 - Pre-commit: all configured hooks passed on 2026-07-06.
 
 ## Implemented capabilities
@@ -53,7 +53,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Asset-aware Telegram review prompts for individual stocks, core ETFs, bond ETFs,
   and gold proxies, while legacy untyped entries retain price-only reporting.
 - Optional immutable loading and strict validation of PortfoTrack's schema 1.0 local
-  allocation export; daily orchestration does not consume it yet.
+  allocation export before external calls. Missing context preserves price-only mode;
+  age 0–7 days is current, 8–30 days is stale, and 31+ days expires allocation use.
 
 ## Update rule
 

@@ -36,8 +36,10 @@ Secrets are supplied through environment variables. They must not appear in conf
 An explicitly exported PortfoTrack allocation snapshot may be placed at
 `config/portfotrack_context.json`. It is local, read-only, optional, and ignored by
 Git because it contains personal portfolio amounts. An absent file preserves
-price-only operation; an existing malformed or unsupported export must not be
-silently ignored once orchestration integration is enabled.
+price-only operation. An existing malformed, unsupported, internally inconsistent,
+or future-dated export aborts before Gist, provider, or Telegram calls. Context that
+is 8–30 days old is stale; context at least 31 days old disables future allocation
+guidance while preserving price-only processing.
 
 ## Persistence
 

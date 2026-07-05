@@ -1,6 +1,7 @@
 """Tests for main module — consolidated daily summary orchestration."""
 
 from datetime import date
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -33,9 +34,13 @@ def sample_configs() -> list[TickerConfig]:
 
 
 @pytest.fixture(autouse=True)
-def _set_gist_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ensure GIST_ID is always set for test runs."""
+def _set_gist_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Provide environment and an absent optional context for every test."""
     monkeypatch.setenv("GIST_ID", "test-gist-id")
+    monkeypatch.setattr(
+        "peakguard.main._PORTFOTRACK_CONTEXT_PATH",
+        tmp_path / "portfotrack_context.json",
+    )
 
 
 # AMZN rolling ATH=500.0 (2025-09-01), MSFT rolling ATH=400.0 (2025-09-01)
@@ -80,6 +85,26 @@ _METRICS_HISTORY_CSV = (
 
 class TestRun:
     """Tests for the run() orchestration with consolidated daily summary."""
+
+    def test_invalid_portfolio_context_fails_before_external_calls(
+        self, mocker
+    ) -> None:
+        """An existing malformed context aborts before Gist or provider I/O."""
+        from peakguard import main
+
+        main._PORTFOTRACK_CONTEXT_PATH.write_text("{not-json", encoding="utf-8")
+        mock_read_gist = mocker.patch("peakguard.main.read_gist")
+        mock_fetch_price = mocker.patch("peakguard.main.fetch_price")
+        mock_fetch_history = mocker.patch("peakguard.main.fetch_history")
+        mock_send_summary = mocker.patch("peakguard.main.send_daily_summary")
+
+        with pytest.raises(ValueError, match="valid JSON"):
+            main.run()
+
+        mock_read_gist.assert_not_called()
+        mock_fetch_price.assert_not_called()
+        mock_fetch_history.assert_not_called()
+        mock_send_summary.assert_not_called()
 
     @patch("peakguard.main.write_gist")
     @patch("peakguard.main.send_daily_summary")

@@ -36,6 +36,7 @@ from peakguard.notifier import (
     TickerSummary,
     send_daily_summary,
 )
+from peakguard.portfolio_context import ContextFreshness, load_portfolio_context
 from peakguard.storage import ClosingPrice, deserialize_history, serialize_history
 
 __all__ = ["run"]
@@ -44,6 +45,11 @@ logger = logging.getLogger(__name__)
 
 _CONFIG_PATH = (
     Path(__file__).resolve().parent.parent.parent / "config" / "portfolio.yaml"
+)
+_PORTFOTRACK_CONTEXT_PATH = (
+    Path(__file__).resolve().parent.parent.parent
+    / "config"
+    / "portfotrack_context.json"
 )
 _GIST_FILENAME = "peak_prices.csv"
 _WINDOW_DAYS = 365
@@ -160,9 +166,31 @@ def run() -> None:
 
     Raises:
         GistError: If history cannot be read or the updated history cannot be saved.
+        TypeError: If an existing PortfoTrack context has invalid field types.
+        ValueError: If configuration or an existing PortfoTrack context is invalid.
     """
     configs = load_portfolio(_CONFIG_PATH)
     alert_limits = load_alert_thresholds(_CONFIG_PATH)
+    portfolio_context = load_portfolio_context(_PORTFOTRACK_CONTEXT_PATH)
+    if portfolio_context is None:
+        logger.info("No PortfoTrack context supplied; using price-only mode")
+    else:
+        freshness = portfolio_context.freshness(date.today())
+        if freshness is ContextFreshness.STALE:
+            logger.warning(
+                "PortfoTrack context is stale as of %s; allocation guidance "
+                "will require a warning",
+                portfolio_context.as_of,
+            )
+        elif freshness is ContextFreshness.EXPIRED:
+            logger.warning(
+                "PortfoTrack context expired as of %s; allocation guidance disabled",
+                portfolio_context.as_of,
+            )
+        else:
+            logger.info(
+                "PortfoTrack context is current as of %s", portfolio_context.as_of
+            )
     try:
         history = _load_history_from_gist()
     except GistError:

@@ -24,11 +24,12 @@ PeakGuard is a synchronous Python 3.12+ batch application. GitHub Actions starts
 
 1. `src/main.py` starts `peakguard.main.run()`.
 2. `peakguard.config` loads assets and alert limits from `config/portfolio.yaml`.
-3. `peakguard.gist_client` reads `peak_prices.csv` from a GitHub Gist.
-4. For each ticker, `peakguard.fetcher` obtains either one year of bootstrap history or the latest close from yfinance.
-5. `peakguard.mdd_calc` updates the rolling history and calculates metrics without performing I/O.
-6. `peakguard.storage` serializes updated history, and `peakguard.gist_client` writes it back to the Gist.
-7. `peakguard.notifier` formats active alerts, fetch failures, and final data health into one Telegram report and sends it.
+3. `peakguard.portfolio_context` optionally loads and classifies the local PortfoTrack export; invalid existing context fails before external calls.
+4. `peakguard.gist_client` reads `peak_prices.csv` from a GitHub Gist.
+5. For each ticker, `peakguard.fetcher` obtains either one year of bootstrap history or the latest close from yfinance.
+6. `peakguard.mdd_calc` updates the rolling history and calculates metrics without performing I/O.
+7. `peakguard.storage` serializes updated history, and `peakguard.gist_client` writes it back to the Gist.
+8. `peakguard.notifier` formats active alerts, fetch failures, and final data health into one Telegram report and sends it.
 
 Fatal Gist reads skip price evaluation and writes but still attempt a health-only report before the error fails the workflow. Gist writes happen before notification so the report describes the actual persistence outcome.
 
@@ -48,9 +49,10 @@ Fatal Gist reads skip price evaluation and writes but still attempt a health-onl
 
 Domain code must remain deterministic and unaware of files, environment variables, HTTP, yfinance, Telegram, or Gists. Integration modules translate provider failures into typed application errors. The orchestrator decides whether a failure is recoverable for the current run.
 
-The PortfoTrack context boundary is implemented as a local, read-only loader but is
-not yet connected to daily orchestration. PortfoTrack remains responsible for all
-allocation calculations.
+The PortfoTrack context boundary is a local, read-only loader connected before remote
+I/O. Orchestration classifies its freshness, but portfolio actions and allocation
+reporting are not yet implemented. PortfoTrack remains responsible for all allocation
+calculations.
 
 ## Design constraints
 

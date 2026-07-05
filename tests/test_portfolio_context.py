@@ -1,12 +1,14 @@
 """Tests for loading the PortfoTrack allocation-context export."""
 
 import json
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 
 from peakguard.portfolio_context import (
     AllocationStatus,
+    ContextFreshness,
     load_portfolio_context,
 )
 
@@ -92,6 +94,35 @@ def test_loaded_group_mapping_is_immutable(tmp_path: Path) -> None:
     assert context is not None
     with pytest.raises(TypeError):
         context.groups["new"] = context.groups["us_equity"]  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    ("age_days", "expected"),
+    [
+        (0, ContextFreshness.CURRENT),
+        (7, ContextFreshness.CURRENT),
+        (8, ContextFreshness.STALE),
+        (30, ContextFreshness.STALE),
+        (31, ContextFreshness.EXPIRED),
+    ],
+)
+def test_classifies_context_freshness(
+    tmp_path: Path, age_days: int, expected: ContextFreshness
+) -> None:
+    context = load_portfolio_context(_write_payload(tmp_path, _valid_payload()))
+    assert context is not None
+
+    result = context.freshness(context.as_of + timedelta(days=age_days))
+
+    assert result is expected
+
+
+def test_rejects_context_date_in_future(tmp_path: Path) -> None:
+    context = load_portfolio_context(_write_payload(tmp_path, _valid_payload()))
+    assert context is not None
+
+    with pytest.raises(ValueError, match="future"):
+        context.freshness(context.as_of - timedelta(days=1))
 
 
 def test_rejects_malformed_json(tmp_path: Path) -> None:

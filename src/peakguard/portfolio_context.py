@@ -14,6 +14,7 @@ from typing import Mapping
 __all__ = [
     "AllocationGroup",
     "AllocationStatus",
+    "ContextFreshness",
     "PortfolioContext",
     "load_portfolio_context",
 ]
@@ -28,6 +29,14 @@ class AllocationStatus(StrEnum):
     BELOW_TOLERANCE = "below_tolerance"
     WITHIN_TOLERANCE = "within_tolerance"
     ABOVE_TOLERANCE = "above_tolerance"
+
+
+class ContextFreshness(StrEnum):
+    """Usability state derived from a context snapshot's age."""
+
+    CURRENT = "current"
+    STALE = "stale"
+    EXPIRED = "expired"
 
 
 @dataclass(frozen=True)
@@ -161,6 +170,28 @@ class PortfolioContext:
             )
             if not math.isclose(target_total, 1.0, abs_tol=_RATIO_TOLERANCE):
                 raise ValueError("asset target_weight values must sum to 1.0")
+
+    def freshness(self, reference_date: date) -> ContextFreshness:
+        """Classify context age for allocation-guidance eligibility.
+
+        Args:
+            reference_date: Date of the PeakGuard run using this context.
+
+        Returns:
+            ``CURRENT`` for age 0–7 days, ``STALE`` for 8–30 days, and
+            ``EXPIRED`` for 31 days or older.
+
+        Raises:
+            ValueError: If the snapshot date is in the future.
+        """
+        age_days = (reference_date - self.as_of).days
+        if age_days < 0:
+            raise ValueError("PortfoTrack context snapshot date is in the future")
+        if age_days <= 7:
+            return ContextFreshness.CURRENT
+        if age_days <= 30:
+            return ContextFreshness.STALE
+        return ContextFreshness.EXPIRED
 
 
 def load_portfolio_context(path: Path) -> PortfolioContext | None:

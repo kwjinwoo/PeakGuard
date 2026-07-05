@@ -173,10 +173,10 @@ Objective: combine PeakGuard price signals with PortfoTrack allocation context w
 
 - [x] Adopt PortfoTrack's read-only `schema_version: "1.0"` JSON export containing snapshot date, currency, total assets, and asset-class weights and bounds.
 - [x] Load optional `config/portfotrack_context.json` into immutable validated objects.
-- [ ] Keep PeakGuard functional when no portfolio snapshot is supplied.
-- [ ] Fail clearly when an existing snapshot is malformed, unsupported, or internally inconsistent.
-- [ ] Treat context age 0–7 days as current and 8–30 days as stale with a warning.
-- [ ] Disable allocation guidance at 31 or more days old while preserving price-only alerts.
+- [x] Keep PeakGuard functional when no portfolio snapshot is supplied.
+- [x] Fail clearly when an existing snapshot is malformed, unsupported, or internally inconsistent.
+- [x] Treat context age 0–7 days as current and 8–30 days as stale with a warning.
+- [x] Disable allocation guidance at 31 or more days old while preserving price-only alerts.
 - [x] Keep portfolio calculation ownership in PortfoTrack rather than duplicating it in PeakGuard.
 
 ### Mapping and classification
