@@ -48,7 +48,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Deterministic discount review levels derived from MDD, Z-score, and bounce, shown before supporting metrics.
 - Explicit `THESIS_CHECK` precedence reserved for a future non-price asset policy input.
 - Backward-compatible optional asset metadata with validated asset types, portfolio
-  groups, thesis policy, and proxy mappings.
+  groups, thesis policy, and one-way canonical US-exposure proxy mappings. The two
+  KRW wrapper ETFs map to `SPY` and `QQQ` while retaining their own price feeds.
 
 ## Known gaps and concerns
 

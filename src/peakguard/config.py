@@ -40,7 +40,7 @@ class TickerConfig:
         asset_type: Optional category used for asset-appropriate review behavior.
         portfolio_group: Optional PortfoTrack allocation group name.
         thesis_required: Whether deep discounts require an explicit thesis review.
-        proxy_for: Optional held-asset name represented by this market ticker.
+        proxy_for: Optional canonical US ticker whose exposure this ticker represents.
 
     Raises:
         TypeError: If optional metadata has an invalid type.

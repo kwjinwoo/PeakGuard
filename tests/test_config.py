@@ -71,19 +71,19 @@ class TestTickerConfig:
 
     def test_valid_asset_metadata(self) -> None:
         cfg = TickerConfig(
-            ticker="AAPL",
-            name="Apple",
+            ticker="360750.KS",
+            name="TIGER 미국S&P500",
             threshold=15.0,
-            asset_type=AssetType.INDIVIDUAL_STOCK,
+            currency="KRW",
+            asset_type=AssetType.CORE_ETF,
             portfolio_group="US Equity",
-            thesis_required=True,
-            proxy_for="Apple position",
+            proxy_for="SPY",
         )
 
-        assert cfg.asset_type is AssetType.INDIVIDUAL_STOCK
+        assert cfg.asset_type is AssetType.CORE_ETF
         assert cfg.portfolio_group == "US Equity"
-        assert cfg.thesis_required is True
-        assert cfg.proxy_for == "Apple position"
+        assert cfg.thesis_required is False
+        assert cfg.proxy_for == "SPY"
 
     @pytest.mark.parametrize("field", ["portfolio_group", "proxy_for"])
     def test_rejects_blank_optional_string(self, field: str) -> None:
@@ -214,7 +214,6 @@ class TestLoadPortfolio:
             "    asset_type: individual_stock\n"
             '    portfolio_group: "US Equity"\n'
             "    thesis_required: true\n"
-            '    proxy_for: "Apple position"\n'
         )
         config_file = tmp_path / "portfolio.yaml"
         config_file.write_text(yaml_content)
@@ -224,7 +223,7 @@ class TestLoadPortfolio:
         assert result[0].asset_type is AssetType.INDIVIDUAL_STOCK
         assert result[0].portfolio_group == "US Equity"
         assert result[0].thesis_required is True
-        assert result[0].proxy_for == "Apple position"
+        assert result[0].proxy_for is None
 
     @pytest.mark.parametrize(
         ("field", "value"),
@@ -258,9 +257,11 @@ class TestLoadPortfolio:
 
         result = load_portfolio(config_path)
 
-        tickers = [cfg.ticker for cfg in result]
-        assert "AMZN" in tickers
-        assert "NVDA" in tickers
+        configs = {cfg.ticker: cfg for cfg in result}
+        assert "AMZN" in configs
+        assert "NVDA" in configs
+        assert configs["360750.KS"].proxy_for == "SPY"
+        assert configs["133690.KS"].proxy_for == "QQQ"
         assert len(result) >= 5
 
 

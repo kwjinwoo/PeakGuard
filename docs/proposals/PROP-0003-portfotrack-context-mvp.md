@@ -31,6 +31,7 @@ PeakGuard can identify price discounts but cannot explain whether the correspond
 ## Candidate direction
 
 - Preserve the `tickers` mapping and add optional `asset_type`, `portfolio_group`, `proxy_for`, and `thesis_required` fields.
+- Define `proxy_for` in one direction: the configured price ticker points to the canonical US-market ticker whose exposure it represents. The field does not change the price-fetch symbol.
 - Load an optional, versioned `config/portfotrack_context.json` snapshot.
 - Keep price-derived `ReviewLevel` separate from portfolio-derived `PortfolioAction`.
 - Disable allocation guidance when context is at least 31 days old while retaining price-only alerts.

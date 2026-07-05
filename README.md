@@ -69,15 +69,15 @@ alert_thresholds:
 
 **Current tracked assets:**
 
-| Ticker | Name |
-|---|---|
-| `AMZN` | Amazon |
-| `MSFT` | Microsoft |
-| `META` | Meta |
-| `NVDA` | Nvidia |
-| `GOOGL` | Google |
-| `360750.KS` | TIGER 미국S&P500 |
-| `133690.KS` | TIGER 미국나스닥100 |
+| Ticker | Name | Exposure |
+|---|---|---|
+| `AMZN` | Amazon | US individual stock |
+| `MSFT` | Microsoft | US individual stock |
+| `META` | Meta | US individual stock |
+| `NVDA` | Nvidia | US individual stock |
+| `GOOGL` | Google | US individual stock |
+| `360750.KS` | TIGER 미국S&P500 | S&P 500 (`SPY` proxy) |
+| `133690.KS` | TIGER 미국나스닥100 | Nasdaq-100 (`QQQ` proxy) |
 
 ---
 

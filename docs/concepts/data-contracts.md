@@ -3,16 +3,18 @@ id: data-contracts
 title: Data Contracts
 type: concept
 status: active
-last_verified: 2026-07-04
+last_verified: 2026-07-05
 related:
   - domain-model.md
   - configuration.md
   - ../decisions/0001-csv-gist-persistence.md
 code:
+  - src/peakguard/config.py
   - src/peakguard/storage.py
   - src/peakguard/fetcher.py
   - src/peakguard/notifier.py
 tests:
+  - tests/test_config.py
   - tests/test_storage.py
   - tests/test_main.py
   - tests/test_notifier.py
@@ -44,10 +46,13 @@ The canonical serializer is `src/peakguard/storage.py`.
 
 ## Configuration objects
 
-- `TickerConfig`: ticker, display name, MDD threshold, and currency.
+- `TickerConfig`: ticker, display name, MDD threshold, currency, and optional asset
+  type, portfolio group, thesis policy, and canonical US-exposure proxy ticker.
 - `AlertThresholds`: days-since-ATH limit, negative Z-score threshold, and minimum bounce percentage.
 
-Both are immutable. Invalid configuration raises native validation errors.
+Both are immutable. Invalid configuration raises native validation errors. A
+`proxy_for` value records exposure identity without changing the configured ticker
+used for price fetching.
 
 ## Provider result
 

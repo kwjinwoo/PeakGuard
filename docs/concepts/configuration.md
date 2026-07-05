@@ -3,7 +3,7 @@ id: configuration
 title: Configuration
 type: concept
 status: active
-last_verified: 2026-07-02
+last_verified: 2026-07-05
 related:
   - data-contracts.md
   - ../operations.md
@@ -38,7 +38,7 @@ tickers:
 - `asset_type` is optional and accepts `individual_stock`, `core_etf`, `bond_etf`, or `gold_proxy`.
 - `portfolio_group` optionally maps the asset to a PortfoTrack allocation group.
 - `thesis_required` defaults to `false`; only an `individual_stock` may enable it.
-- `proxy_for` optionally names a held asset represented by the tracked market symbol and cannot equal the ticker itself.
+- `proxy_for` optionally points from the configured ticker to a canonical US-market ticker with equivalent intended exposure and cannot equal the configured ticker. For example, `360750.KS` uses `proxy_for: SPY`, while prices continue to be fetched from `360750.KS` in KRW.
 - Optional string metadata must be non-blank. Omitting all asset metadata preserves legacy price-only behavior.
 
 ## Global alert thresholds

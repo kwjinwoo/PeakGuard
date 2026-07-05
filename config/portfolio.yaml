@@ -41,12 +41,14 @@ tickers:
     currency: KRW
     asset_type: core_etf
     portfolio_group: "US Equity"
+    proxy_for: SPY
   "133690.KS":
     name: "TIGER 미국나스닥100"
     threshold: 15.0
     currency: KRW
     asset_type: core_etf
     portfolio_group: "US Equity"
+    proxy_for: QQQ
 
 # Global alert thresholds for conditional metric alerts
 alert_thresholds:

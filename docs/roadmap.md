@@ -138,9 +138,9 @@ exposure, then stop treating every supported ticker as the same kind of asset.
 
 ### Supported universe
 
-- [ ] Document the intended US benchmark or asset exposure for wrapper ETFs.
-- [ ] Configure `proxy_for` when a wrapper should map to a canonical US-market asset.
-- [ ] Keep quote currency separate from monitored-universe eligibility.
+- [x] Document the intended US benchmark or asset exposure for wrapper ETFs.
+- [x] Configure `proxy_for` when a wrapper should map to a canonical US-market asset.
+- [x] Keep quote currency separate from monitored-universe eligibility.
 
 ### Asset-centric configuration
 
@@ -161,9 +161,9 @@ Type-specific threshold inheritance and a full `tickers`-to-`assets` migration a
 
 ### Completion criteria
 
-- [ ] Every production entry is an in-scope US individual stock or ETF exposure with asset metadata.
+- [x] Every production entry is an in-scope US individual stock or ETF exposure with asset metadata.
 - [ ] Individual stocks and equity, bond, or gold-exposure ETFs can receive different review language.
-- [ ] README examples and configured assets describe the same monitored universe.
+- [x] README examples and configured assets describe the same monitored universe.
 
 ## Phase 4 — Portfolio-aware alerts
 
