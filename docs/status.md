@@ -3,7 +3,7 @@ id: current-status
 title: Current Status
 type: status
 status: active
-last_verified: 2026-07-04
+last_verified: 2026-07-05
 verified_by:
   - uv run pytest -q
   - uv run pre-commit run --all-files
@@ -28,8 +28,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - The pipeline reads and writes `peak_prices.csv` in a GitHub Gist.
 - Portfolio and alert limits are loaded from `config/portfolio.yaml`.
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
-- Tests: **285 passed** on 2026-07-04.
-- Pre-commit: all configured hooks passed on 2026-07-04.
+- Tests: **290 passed** on 2026-07-05.
+- Pre-commit: all configured hooks passed on 2026-07-05.
 
 ## Implemented capabilities
 
@@ -50,10 +50,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Backward-compatible optional asset metadata with validated asset types, portfolio
   groups, thesis policy, and one-way canonical US-exposure proxy mappings. The two
   KRW wrapper ETFs map to `SPY` and `QQQ` while retaining their own price feeds.
-
-## Known gaps and concerns
-
-- Asset metadata is loaded and validated but does not yet affect report language.
+- Asset-aware Telegram review prompts for individual stocks, core ETFs, bond ETFs,
+  and gold proxies, while legacy untyped entries retain price-only reporting.
 
 ## Update rule
 

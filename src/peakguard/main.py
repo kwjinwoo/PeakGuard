@@ -265,6 +265,8 @@ def run() -> None:
                 zscore=zscore,
                 zscore_alert=zscore_alert,
                 review_level=review_level,
+                asset_type=cfg.asset_type,
+                thesis_required=cfg.thesis_required,
             )
         else:
             drawdown = calculate_drawdown(current_price, new_ath)
@@ -305,6 +307,8 @@ def run() -> None:
                 zscore=zscore,
                 zscore_alert=zscore_alert,
                 review_level=review_level,
+                asset_type=cfg.asset_type,
+                thesis_required=cfg.thesis_required,
             )
 
         summaries.append(summary)

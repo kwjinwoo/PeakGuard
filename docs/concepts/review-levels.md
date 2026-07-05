@@ -3,7 +3,7 @@ id: discount-review-levels
 title: Discount Review Levels
 type: concept
 status: active
-last_verified: 2026-07-04
+last_verified: 2026-07-05
 related:
   - alerts/price-signals.md
   - ../decisions/0003-discount-review-level-precedence.md
@@ -39,7 +39,7 @@ Bounce never overrides an active MDD or Z-score condition. Existing inclusive MD
 
 ## Thesis policy
 
-`THESIS_CHECK` requires `thesis_check_required=True` and overrides every price-derived state. Daily orchestration does not infer this input from price behavior. It remains false until asset taxonomy or another explicit policy source can identify assets that require thesis review.
+`THESIS_CHECK` requires `thesis_check_required=True` and overrides every price-derived state. Daily orchestration does not infer this input from price behavior, so the price-level input remains false. Current `TickerConfig.thesis_required` selects asset-appropriate report wording; Phase 4 will combine it with portfolio context as a separate `PortfolioAction`.
 
 Portfolio-aware classification remains a separate layer. Future `PortfolioAction.THESIS_CHECK` combines explicit individual-stock thesis policy with `DEEP_DISCOUNT`; it does not change the price-derived `ReviewLevel`. See [ADR-0004](../decisions/0004-separate-price-levels-from-portfolio-actions.md).
 
@@ -50,3 +50,13 @@ When Z-score is unavailable because history is insufficient or has zero variance
 ## Reporting
 
 Every reportable ticker shows `검토 단계` before price and metric details. Existing alert labels remain as supporting evidence, while the review level provides the primary interpretation.
+
+When asset metadata is present, `검토 관점` adds a non-prescriptive prompt:
+
+- individual stocks with thesis policy prompt an investment-thesis review;
+- other individual stocks prompt a fundamentals review;
+- core ETFs use next-rebalancing language;
+- bond ETFs prompt an interest-rate and duration-risk review; and
+- gold proxies prompt a portfolio hedge-allocation review.
+
+Legacy entries without `asset_type` retain the price-only report format.

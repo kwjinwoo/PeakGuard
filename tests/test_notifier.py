@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 import requests
 
+from peakguard.config import AssetType
 from peakguard.errors import FetchFailureCause, NotificationError
 from peakguard.mdd_calc import ReviewLevel
 from peakguard.notifier import (
@@ -673,6 +674,43 @@ class TestFormatDailySummary:
         assert level_line in result
         assert result.index(level_line) < result.index("현재가 / 최고가")
         assert "buy" not in result.lower()
+
+    @pytest.mark.parametrize(
+        ("asset_type", "thesis_required", "expected"),
+        [
+            (AssetType.INDIVIDUAL_STOCK, True, "투자 논거를 점검"),
+            (AssetType.INDIVIDUAL_STOCK, False, "기업 펀더멘털을 점검"),
+            (AssetType.CORE_ETF, False, "다음 리밸런싱에서 편입 비중을 검토"),
+            (AssetType.BOND_ETF, False, "금리와 듀레이션 위험을 점검"),
+            (AssetType.GOLD_PROXY, False, "포트폴리오 헤지 배분을 점검"),
+        ],
+    )
+    def test_uses_asset_appropriate_review_language(
+        self, asset_type: AssetType, thesis_required: bool, expected: str
+    ) -> None:
+        summary = TickerSummary(
+            ticker="TEST",
+            name="Test asset",
+            current_price=80.0,
+            ath=100.0,
+            mdd_pct=20.0,
+            days_since_ath=30,
+            days_since_ath_limit=180,
+            bounce_pct=0.0,
+            mdd_alert=True,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+            review_level=ReviewLevel.ATTRACTIVE,
+            asset_type=asset_type,
+            thesis_required=thesis_required,
+        )
+
+        result = format_daily_summary([summary], date(2026, 3, 7))
+
+        assert f"검토 관점: {expected}" in result
+        for forbidden in ("buy now", "strong buy", "매수", "매도", "반드시 추가"):
+            assert forbidden not in result.lower()
 
     def test_non_alert_zscore_is_context_for_another_alert(self) -> None:
         """Reportable tickers show Z-score even when it did not breach."""

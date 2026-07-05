@@ -58,7 +58,7 @@ For verified current behavior and known gaps, see [Current status](status.md). D
 | ---: | --- | --- | --- |
 | 1 | Reliability and data safety | Complete | Never evaluate signals from invalid persistence state |
 | 2 | Discount signal model | Complete | Convert raw metrics into investment-review levels |
-| 3 | Asset taxonomy | Planned | Classify the supported US-exposure stock and ETF universe |
+| 3 | Asset taxonomy | Complete | Classify the supported US-exposure stock and ETF universe |
 | 4 | Portfolio-aware alerts | Planned | Combine price signals with PortfoTrack allocation state |
 | 5 | Reporting and UX | Planned | Produce concise, non-prescriptive review prompts |
 | 6 | Maintenance and documentation | Ongoing | Keep behavior understandable to humans and LLM agents |
@@ -155,14 +155,14 @@ exposure, then stop treating every supported ticker as the same kind of asset.
 - [x] Configure individual stocks with explicit thesis policy where appropriate.
 - [x] Keep existing per-ticker MDD thresholds and the global Z-score threshold for the MVP.
 - [x] Test legacy entries, optional metadata, proxy mappings, and invalid combinations.
-- [ ] Use asset-appropriate report language.
+- [x] Use asset-appropriate report language.
 
 Type-specific threshold inheritance and a full `tickers`-to-`assets` migration are deferred until the MVP proves they are necessary.
 
 ### Completion criteria
 
 - [x] Every production entry is an in-scope US individual stock or ETF exposure with asset metadata.
-- [ ] Individual stocks and equity, bond, or gold-exposure ETFs can receive different review language.
+- [x] Individual stocks and equity, bond, or gold-exposure ETFs can receive different review language.
 - [x] README examples and configured assets describe the same monitored universe.
 
 ## Phase 4 — Portfolio-aware alerts

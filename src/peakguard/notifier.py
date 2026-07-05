@@ -13,6 +13,7 @@ from enum import Enum
 
 import requests
 
+from peakguard.config import AssetType
 from peakguard.errors import FetchFailureCause, NotificationError
 from peakguard.mdd_calc import ReviewLevel
 
@@ -102,6 +103,8 @@ class TickerSummary:
         zscore: Current price Z-score, or None when it cannot be calculated.
         zscore_alert: True if Z-score meets the configured low-price threshold.
         review_level: Highest-priority investment-review state.
+        asset_type: Optional category used to select review language.
+        thesis_required: Whether an individual stock requires thesis review.
 
     Raises:
         ValueError: If ticker is empty.
@@ -123,6 +126,8 @@ class TickerSummary:
     zscore: float | None = None
     zscore_alert: bool = False
     review_level: ReviewLevel = ReviewLevel.NONE
+    asset_type: AssetType | None = None
+    thesis_required: bool = False
 
     def __post_init__(self) -> None:
         if not self.ticker or not self.ticker.strip():
@@ -156,6 +161,28 @@ def _format_price(price: float, currency: str) -> str:
     return f"${price:,.2f}"
 
 
+def _asset_review_prompt(summary: TickerSummary) -> str | None:
+    """Return a non-prescriptive review prompt for the configured asset type.
+
+    Args:
+        summary: The ticker summary whose asset policy selects the wording.
+
+    Returns:
+        An asset-appropriate prompt, or ``None`` for legacy untyped assets.
+    """
+    if summary.asset_type is AssetType.INDIVIDUAL_STOCK:
+        if summary.thesis_required:
+            return "투자 논거를 점검하세요."
+        return "기업 펀더멘털을 점검하세요."
+    if summary.asset_type is AssetType.CORE_ETF:
+        return "다음 리밸런싱에서 편입 비중을 검토하세요."
+    if summary.asset_type is AssetType.BOND_ETF:
+        return "금리와 듀레이션 위험을 점검하세요."
+    if summary.asset_type is AssetType.GOLD_PROXY:
+        return "포트폴리오 헤지 배분을 점검하세요."
+    return None
+
+
 def _format_ticker_section(summary: TickerSummary) -> str:
     """Build the message section for a single ticker with active alerts.
 
@@ -181,6 +208,9 @@ def _format_ticker_section(summary: TickerSummary) -> str:
     lines: list[str] = []
     lines.append(f"{summary.ticker} ({summary.name})")
     lines.append(f"검토 단계: {summary.review_level.value}")
+    review_prompt = _asset_review_prompt(summary)
+    if review_prompt is not None:
+        lines.append(f"검토 관점: {review_prompt}")
     lines.append(f"상태: {' '.join(status_parts)}")
 
     # Price / ATH line

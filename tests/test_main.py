@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from peakguard.config import AlertThresholds, TickerConfig
+from peakguard.config import AlertThresholds, AssetType, TickerConfig
 from peakguard.errors import (
     FetchError,
     FetchFailureCause,
@@ -1246,6 +1246,9 @@ class TestRunMetricAlerts:
                 name="TIGER 미국S&P500",
                 threshold=15.0,
                 currency="KRW",
+                asset_type=AssetType.CORE_ETF,
+                portfolio_group="US Equity",
+                proxy_for="SPY",
             ),
         ]
         mock_load_thresholds.return_value = AlertThresholds(
@@ -1271,3 +1274,5 @@ class TestRunMetricAlerts:
         tiger = summaries[0]
         assert tiger.ticker == "360750.KS"
         assert tiger.currency == "KRW"
+        assert tiger.asset_type is AssetType.CORE_ETF
+        assert tiger.thesis_required is False
