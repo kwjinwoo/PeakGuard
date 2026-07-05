@@ -201,6 +201,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Local PortfoTrack export (contains personal portfolio amounts)
+config/portfotrack_context.json
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

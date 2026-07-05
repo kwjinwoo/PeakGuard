@@ -24,7 +24,7 @@ PeakGuard can identify price discounts but cannot explain whether the correspond
 ## Evidence
 
 - PeakGuard already derives price-only `ReviewLevel` values.
-- `THESIS_CHECK` is reserved for an explicit non-price policy input but current ticker configuration supplies none.
+- `THESIS_CHECK` is reserved for an explicit non-price policy input; current ticker configuration records thesis policy without deriving it from price.
 - Existing `tickers` configuration can be extended without breaking price-only operation.
 - The MVP input is a local, read-only JSON export rather than direct PortfoTrack integration.
 
@@ -33,6 +33,7 @@ PeakGuard can identify price discounts but cannot explain whether the correspond
 - Preserve the `tickers` mapping and add optional `asset_type`, `portfolio_group`, `proxy_for`, and `thesis_required` fields.
 - Define `proxy_for` in one direction: the configured price ticker points to the canonical US-market ticker whose exposure it represents. The field does not change the price-fetch symbol.
 - Load an optional, versioned `config/portfotrack_context.json` snapshot.
+- Consume PortfoTrack's existing `schema_version: "1.0"` export with stable `asset_id` values, rather than defining a competing interchange shape.
 - Keep price-derived `ReviewLevel` separate from portfolio-derived `PortfolioAction`.
 - Disable allocation guidance when context is at least 31 days old while retaining price-only alerts.
 - Treat malformed existing context as a clear configuration error rather than silently ignoring it.

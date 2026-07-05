@@ -3,7 +3,7 @@ id: current-status
 title: Current Status
 type: status
 status: active
-last_verified: 2026-07-05
+last_verified: 2026-07-06
 verified_by:
   - uv run pytest -q
   - uv run pre-commit run --all-files
@@ -28,8 +28,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - The pipeline reads and writes `peak_prices.csv` in a GitHub Gist.
 - Portfolio and alert limits are loaded from `config/portfolio.yaml`.
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
-- Tests: **290 passed** on 2026-07-05.
-- Pre-commit: all configured hooks passed on 2026-07-05.
+- Tests: **310 passed** on 2026-07-06.
+- Pre-commit: all configured hooks passed on 2026-07-06.
 
 ## Implemented capabilities
 
@@ -52,6 +52,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
   KRW wrapper ETFs map to `SPY` and `QQQ` while retaining their own price feeds.
 - Asset-aware Telegram review prompts for individual stocks, core ETFs, bond ETFs,
   and gold proxies, while legacy untyped entries retain price-only reporting.
+- Optional immutable loading and strict validation of PortfoTrack's schema 1.0 local
+  allocation export; daily orchestration does not consume it yet.
 
 ## Update rule
 

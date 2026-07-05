@@ -7,6 +7,7 @@ This package contains the PeakGuard application. Maintain strict responsibility 
 - `mdd_calc.py` is the domain layer. Keep calculations deterministic and free of file, environment, logging, and network access. It owns rolling-window ATH, drawdown, threshold, days-since-ATH, Z-score, bounce, and history-update rules.
 - `storage.py` owns the `ClosingPrice` value object, deterministic CSV serialization/deserialization, and local synchronous file I/O. The persisted schema is exactly `ticker,date,price`; output remains human-readable, sorted, and newline-terminated.
 - `config.py` validates `config/portfolio.yaml` and converts it to immutable typed configuration objects. Invalid structure or values are programmer/configuration errors and should raise native exceptions.
+- `portfolio_context.py` validates the optional local PortfoTrack allocation export and converts it to immutable typed context objects. It may verify exported facts for consistency but must not take ownership of portfolio allocation calculations.
 - `fetcher.py` is the sole `yfinance` boundary. Fetch only data needed by the pipeline, keep calls synchronous, classify known failures, and convert external results to package value objects.
 - `notifier.py` is the Telegram boundary and owns report formatting. Keep pure formatting separate from HTTP sending and retain the single consolidated daily-message behavior.
 - `gist_client.py` is the GitHub Gist HTTP boundary. Production history is `peak_prices.csv`; do not reintroduce the older JSON/`peak_prices.json` design.

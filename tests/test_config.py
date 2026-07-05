@@ -260,6 +260,7 @@ class TestLoadPortfolio:
         configs = {cfg.ticker: cfg for cfg in result}
         assert "AMZN" in configs
         assert "NVDA" in configs
+        assert configs["AMZN"].portfolio_group == "us_equity"
         assert configs["360750.KS"].proxy_for == "SPY"
         assert configs["133690.KS"].proxy_for == "QQQ"
         assert len(result) >= 5

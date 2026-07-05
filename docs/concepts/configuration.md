@@ -3,7 +3,7 @@ id: configuration
 title: Configuration
 type: concept
 status: active
-last_verified: 2026-07-05
+last_verified: 2026-07-06
 related:
   - data-contracts.md
   - ../operations.md
@@ -27,7 +27,7 @@ tickers:
     threshold: 15.0
     currency: USD
     asset_type: individual_stock
-    portfolio_group: "US Equity"
+    portfolio_group: us_equity
     thesis_required: true
 ```
 
@@ -36,7 +36,7 @@ tickers:
 - `threshold` is required and must be in `(0, 100]`.
 - `currency` is optional and defaults to `USD`; current formatting explicitly handles `KRW` and otherwise uses the USD format.
 - `asset_type` is optional and accepts `individual_stock`, `core_etf`, `bond_etf`, or `gold_proxy`.
-- `portfolio_group` optionally maps the asset to a PortfoTrack allocation group.
+- `portfolio_group` optionally maps the asset to a stable PortfoTrack `asset_id`, not its display name.
 - `thesis_required` defaults to `false`; only an `individual_stock` may enable it.
 - `proxy_for` optionally points from the configured ticker to a canonical US-market ticker with equivalent intended exposure and cannot equal the configured ticker. For example, `360750.KS` uses `proxy_for: SPY`, while prices continue to be fetched from `360750.KS` in KRW.
 - Optional string metadata must be non-blank. Omitting all asset metadata preserves legacy price-only behavior.

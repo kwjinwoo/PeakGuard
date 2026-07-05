@@ -3,15 +3,17 @@ id: system-architecture
 title: System Overview
 type: architecture
 status: active
-last_verified: 2026-07-04
+last_verified: 2026-07-06
 related:
   - concepts/domain-model.md
   - operations.md
   - decisions/0001-csv-gist-persistence.md
 code:
   - src/peakguard/main.py
+  - src/peakguard/portfolio_context.py
 tests:
   - tests/test_main.py
+  - tests/test_portfolio_context.py
 ---
 
 # System Overview
@@ -37,6 +39,7 @@ Fatal Gist reads skip price evaluation and writes but still attempt a health-onl
 | Orchestration | `peakguard.main` | Coordinates the daily pipeline and partial failures |
 | Domain | `peakguard.mdd_calc` | Pure calculations and rolling-history rules |
 | Configuration | `peakguard.config` | YAML parsing and validation |
+| Portfolio context | `peakguard.portfolio_context` | Optional PortfoTrack schema 1.0 JSON validation and immutable context objects |
 | Storage format | `peakguard.storage` | `ClosingPrice`, CSV conversion, local file I/O |
 | Market data | `peakguard.fetcher` | yfinance integration |
 | Notification | `peakguard.notifier` | Telegram formatting and HTTP integration |
@@ -44,6 +47,10 @@ Fatal Gist reads skip price evaluation and writes but still attempt a health-onl
 | Error taxonomy | `peakguard.errors` | Expected I/O and provider failure types |
 
 Domain code must remain deterministic and unaware of files, environment variables, HTTP, yfinance, Telegram, or Gists. Integration modules translate provider failures into typed application errors. The orchestrator decides whether a failure is recoverable for the current run.
+
+The PortfoTrack context boundary is implemented as a local, read-only loader but is
+not yet connected to daily orchestration. PortfoTrack remains responsible for all
+allocation calculations.
 
 ## Design constraints
 

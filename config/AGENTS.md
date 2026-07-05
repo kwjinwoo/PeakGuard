@@ -7,6 +7,7 @@
 - `tickers` maps each yfinance ticker symbol to required `name` and positive `threshold` in `(0, 100]`, plus optional `currency` (default `USD`), `asset_type`, `portfolio_group`, `thesis_required`, and `proxy_for`. Quote ticker keys when YAML parsing could alter their meaning.
 - `asset_type`, when present, is one of `individual_stock`, `core_etf`, `bond_etf`, or `gold_proxy`. Only `individual_stock` may set `thesis_required: true`. Optional string metadata must be non-blank, and `proxy_for` cannot equal its ticker key.
 - `proxy_for` points from the configured ticker to a canonical US-market ticker with equivalent intended exposure (for example, `360750.KS` points to `SPY`). It records identity for later portfolio mapping and does not replace the ticker used for price fetching.
+- `portfolio_group` is the stable PortfoTrack `asset_id`, not its display name. Optional `portfotrack_context.json` is a local export containing personal amounts and must remain ignored by Git.
 - `alert_thresholds.days_since_ath_limit` is a positive integer.
 - `alert_thresholds.zscore_threshold` is negative.
 - `alert_thresholds.bounce_from_bottom_min` is non-negative.

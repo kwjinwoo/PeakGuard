@@ -1,0 +1,76 @@
+---
+id: portfotrack-context
+title: PortfoTrack Allocation Context
+type: concept
+status: active
+last_verified: 2026-07-06
+related:
+  - configuration.md
+  - data-contracts.md
+  - ../decisions/0004-separate-price-levels-from-portfolio-actions.md
+  - ../roadmap.md
+code:
+  - src/peakguard/portfolio_context.py
+  - config/portfolio.yaml
+tests:
+  - tests/test_portfolio_context.py
+  - tests/test_config.py
+---
+
+# PortfoTrack Allocation Context
+
+PeakGuard consumes PortfoTrack's consumer-neutral allocation export as an optional,
+read-only local input. PortfoTrack owns amount aggregation, allocation weights,
+targets, bounds, drift, and allocation status. PeakGuard validates those facts but
+does not recalculate portfolio allocation.
+
+## Local file
+
+The optional path is `config/portfotrack_context.json`. The file contains personal
+portfolio amounts and is ignored by Git. If it is absent, the loader returns `None`;
+an existing invalid file raises a native configuration error.
+
+The file must come from an explicitly selected PortfoTrack snapshot export. PeakGuard
+does not read PortfoTrack persistence files or call PortfoTrack over a network.
+
+## Schema 1.0
+
+```json
+{
+  "schema_version": "1.0",
+  "snapshot": {
+    "date": "2026-07-05",
+    "currency": "KRW",
+    "total_amount": 10000000
+  },
+  "assets": [
+    {
+      "asset_id": "us_equity",
+      "current_amount": 6000000,
+      "current_weight": 0.6,
+      "target_weight": 0.7,
+      "target_range": {"lower": 0.65, "upper": 0.75},
+      "drift_percentage_points": -10.0,
+      "status": "below_tolerance"
+    }
+  ]
+}
+```
+
+`asset_id` is the stable cross-tool identity. `TickerConfig.portfolio_group` stores
+this ID. Display names are deliberately excluded from identity matching.
+
+Statuses are `below_tolerance`, `within_tolerance`, and `above_tolerance`, with
+inclusive bounds. Assets are sorted by `asset_id`. Amounts are non-negative integers;
+weights and bounds are ratios in `[0, 1]`. An empty portfolio snapshot remains valid
+when current amounts and weights are zero and target facts remain present.
+
+## Validation
+
+`load_portfolio_context()` rejects unsupported versions, malformed JSON, missing or
+incorrectly typed fields, duplicate or unsorted IDs, invalid bounds, status or drift
+disagreement, total-amount disagreement, and inconsistent current or target weight
+totals. Loaded group mappings are immutable.
+
+Age policy and portfolio-action classification are later Phase 4 steps. Loading this
+contract alone does not change daily report behavior.

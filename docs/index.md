@@ -28,6 +28,7 @@ This is the complete catalog of durable PeakGuard Wiki documents. `README.md` ex
 - [Domain model](concepts/domain-model.md)
 - [Configuration](concepts/configuration.md)
 - [Data contracts](concepts/data-contracts.md)
+- [PortfoTrack allocation context](concepts/portfolio-context.md)
 - [Discount review levels](concepts/review-levels.md)
 - [Alert catalog](concepts/alerts/README.md)
 - [Price and ATH signals](concepts/alerts/price-signals.md)

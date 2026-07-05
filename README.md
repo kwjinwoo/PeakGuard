@@ -58,7 +58,7 @@ tickers:
     name: "Nvidia"
     threshold: 15.0   # MDD alert fires when drawdown >= 15%
     asset_type: individual_stock
-    portfolio_group: "US Equity"
+    portfolio_group: us_equity
     thesis_required: true
 
 alert_thresholds:

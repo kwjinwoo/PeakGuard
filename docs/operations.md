@@ -3,7 +3,7 @@ id: operations
 title: Operations
 type: operations
 status: active
-last_verified: 2026-07-04
+last_verified: 2026-07-06
 related:
   - architecture.md
   - runbooks/README.md
@@ -13,6 +13,7 @@ code:
   - src/peakguard/main.py
   - src/peakguard/gist_client.py
   - src/peakguard/notifier.py
+  - src/peakguard/portfolio_context.py
 ---
 
 # Operations
@@ -29,6 +30,14 @@ PeakGuard runs from `.github/workflows/mdd-check.yml` using `python src/main.py`
 | `GIST_ID` | Selects the Gist containing `peak_prices.csv` |
 
 Secrets are supplied through environment variables. They must not appear in configuration, logs, fixtures, documentation examples, or committed files.
+
+## Optional PortfoTrack input
+
+An explicitly exported PortfoTrack allocation snapshot may be placed at
+`config/portfotrack_context.json`. It is local, read-only, optional, and ignored by
+Git because it contains personal portfolio amounts. An absent file preserves
+price-only operation; an existing malformed or unsupported export must not be
+silently ignored once orchestration integration is enabled.
 
 ## Persistence
 

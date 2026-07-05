@@ -3,18 +3,21 @@ id: data-contracts
 title: Data Contracts
 type: concept
 status: active
-last_verified: 2026-07-05
+last_verified: 2026-07-06
 related:
   - domain-model.md
   - configuration.md
+  - portfolio-context.md
   - ../decisions/0001-csv-gist-persistence.md
 code:
   - src/peakguard/config.py
+  - src/peakguard/portfolio_context.py
   - src/peakguard/storage.py
   - src/peakguard/fetcher.py
   - src/peakguard/notifier.py
 tests:
   - tests/test_config.py
+  - tests/test_portfolio_context.py
   - tests/test_storage.py
   - tests/test_main.py
   - tests/test_notifier.py
@@ -53,6 +56,14 @@ The canonical serializer is `src/peakguard/storage.py`.
 Both are immutable. Invalid configuration raises native validation errors. A
 `proxy_for` value records exposure identity without changing the configured ticker
 used for price fetching.
+
+## PortfoTrack allocation context
+
+The optional local `config/portfotrack_context.json` input uses PortfoTrack's
+`schema_version: "1.0"` export. PeakGuard converts it into immutable
+`PortfolioContext` and `AllocationGroup` values. See
+[PortfoTrack allocation context](portfolio-context.md) for the exact shape and
+validation rules.
 
 ## Provider result
 

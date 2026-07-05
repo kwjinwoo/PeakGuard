@@ -13,11 +13,13 @@ code:
   - src/peakguard/config.py
   - src/peakguard/main.py
   - src/peakguard/notifier.py
+  - src/peakguard/portfolio_context.py
 tests:
   - tests/test_mdd_calc.py
   - tests/test_config.py
   - tests/test_main.py
   - tests/test_notifier.py
+  - tests/test_portfolio_context.py
 ---
 
 # ADR-0004: Separate price levels from portfolio actions
@@ -43,7 +45,7 @@ The MVP uses these rules only when fresh, valid context and a known `portfolio_g
 
 `THESIS_CHECK` remains an explicit policy outcome: asset configuration opts into thesis review, while deep discount supplies the price condition. Price alone does not imply a broken thesis.
 
-The context contract includes `schema_version: 1`. Context age is measured from `as_of`: 0–7 days is normal, 8–30 days adds a warning, and 31 or more days disables allocation guidance.
+The context contract consumes PortfoTrack's `schema_version: "1.0"` export. Context age is measured from `snapshot.date`: 0–7 days is normal, 8–30 days adds a warning, and 31 or more days disables allocation guidance.
 
 ## Consequences
 
