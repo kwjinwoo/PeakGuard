@@ -13,7 +13,7 @@ related:
 
 # Product Roadmap
 
-PeakGuard will evolve from a price-drawdown notifier into a portfolio-aware review trigger for ETFs and individual stocks. This is the single source of truth for planned outcomes and their completion state.
+PeakGuard will evolve from a price-drawdown notifier into a portfolio-aware review trigger for US individual stocks and ETFs that provide US-market exposure. This is the single source of truth for planned outcomes and their completion state.
 
 ## Product direction
 
@@ -35,6 +35,21 @@ Thesis remains valid -> decide manually
 
 The user-facing framing is always: **Review trigger, not buy signal.**
 
+### Monitored-universe boundary
+
+Production PeakGuard monitoring is limited by underlying exposure rather than quote
+currency:
+
+- US individual stocks; and
+- ETFs that provide the intended US equity, bond, or gold exposure.
+
+A non-USD-listed wrapper may remain in the monitored universe when it tracks an
+in-scope US benchmark or asset exposure. The current KRW-listed S&P 500 and Nasdaq
+100 ETFs therefore remain valid. Unrelated domestic equities, non-US regional funds,
+and assets without the intended US-market exposure remain out of scope. PortfoTrack
+owns allocation truth, while `proxy_for` can later connect a wrapper to its canonical
+US-market exposure when that distinction matters.
+
 For verified current behavior and known gaps, see [Current status](status.md). Detailed designs that are not yet accepted belong in [Proposals](proposals/README.md), not in this checklist.
 
 ## Progress overview
@@ -43,7 +58,7 @@ For verified current behavior and known gaps, see [Current status](status.md). D
 | ---: | --- | --- | --- |
 | 1 | Reliability and data safety | Complete | Never evaluate signals from invalid persistence state |
 | 2 | Discount signal model | Complete | Convert raw metrics into investment-review levels |
-| 3 | Asset taxonomy | Planned | Apply different rules to stocks, ETFs, bonds, and gold |
+| 3 | Asset taxonomy | Planned | Classify the supported US-exposure stock and ETF universe |
 | 4 | Portfolio-aware alerts | Planned | Combine price signals with PortfoTrack allocation state |
 | 5 | Reporting and UX | Planned | Produce concise, non-prescriptive review prompts |
 | 6 | Maintenance and documentation | Ongoing | Keep behavior understandable to humans and LLM agents |
@@ -118,7 +133,14 @@ Objective: move from independent alert booleans to a clear investment-review mod
 
 ## Phase 3 — Asset taxonomy
 
-Objective: stop treating every ticker as the same kind of asset.
+Objective: limit production monitoring to US stocks and ETFs with intended US-market
+exposure, then stop treating every supported ticker as the same kind of asset.
+
+### Supported universe
+
+- [ ] Document the intended US benchmark or asset exposure for wrapper ETFs.
+- [ ] Configure `proxy_for` when a wrapper should map to a canonical US-market asset.
+- [ ] Keep quote currency separate from monitored-universe eligibility.
 
 ### Asset-centric configuration
 
@@ -139,8 +161,8 @@ Type-specific threshold inheritance and a full `tickers`-to-`assets` migration a
 
 ### Completion criteria
 
-- [ ] Configured metadata describes asset meaning while legacy ticker-only entries remain valid.
-- [ ] Stocks, ETFs, bonds, and gold can receive different review language.
+- [ ] Every production entry is an in-scope US individual stock or ETF exposure with asset metadata.
+- [ ] Individual stocks and equity, bond, or gold-exposure ETFs can receive different review language.
 - [ ] README examples and configured assets describe the same monitored universe.
 
 ## Phase 4 — Portfolio-aware alerts
@@ -236,6 +258,10 @@ PeakGuard will not become:
 - a broker integration layer;
 - a replacement for investment-thesis review; or
 - a real-time intraday trading system.
+
+PeakGuard will also not monitor unrelated domestic equities, non-US regional funds,
+or assets outside the intended US-market exposure. Quote currency alone does not
+determine eligibility.
 
 PeakGuard will remain serverless, low-cost or zero-cost, daily batch-oriented, testable, explicit about uncertainty, and simple enough to reason about.
 
