@@ -178,6 +178,8 @@ Objective: combine PeakGuard price signals with PortfoTrack allocation context w
 - [x] Treat context age 0–7 days as current and 8–30 days as stale with a warning.
 - [x] Disable allocation guidance at 31 or more days old while preserving price-only alerts.
 - [x] Keep portfolio calculation ownership in PortfoTrack rather than duplicating it in PeakGuard.
+- [x] Transport the optional export to scheduled GitHub Actions through an encrypted repository secret without committing portfolio amounts.
+- [x] Restore the secret only inside the ephemeral runner and preserve price-only execution when it is absent.
 
 ### Mapping and classification
 

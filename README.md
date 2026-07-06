@@ -152,8 +152,21 @@ pre-commit install
 | `TELEGRAM_CHAT_ID` | Target chat ID for alerts |
 | `GIST_PAT` | GitHub personal access token (Gist read/write scope) |
 | `GIST_ID` | Target Gist ID for `peak_prices.csv` |
+| `PORTFOTRACK_CONTEXT_B64` | Optional Base64-encoded PortfoTrack export for GitHub Actions |
 
 These are injected automatically via GitHub Actions Secrets in production.
+
+To refresh portfolio context without committing personal amounts, encode the latest
+PortfoTrack export directly into the optional repository secret:
+
+```bash
+base64 < /path/to/portfotrack-allocation-YYYY-MM-DD-v1.json \
+  | tr -d '\n' \
+  | gh secret set PORTFOTRACK_CONTEXT_B64 --repo OWNER/PeakGuard
+```
+
+The scheduled workflow restores the secret only inside its ephemeral runner. If the
+secret is absent, PeakGuard continues in price-only mode.
 
 ### 4. Run
 

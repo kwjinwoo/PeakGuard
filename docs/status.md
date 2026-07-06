@@ -28,7 +28,7 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - The pipeline reads and writes `peak_prices.csv` in a GitHub Gist.
 - Portfolio and alert limits are loaded from `config/portfolio.yaml`.
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
-- Tests: **317 passed** on 2026-07-06.
+- Tests: **318 passed** on 2026-07-06.
 - Pre-commit: all configured hooks passed on 2026-07-06.
 
 ## Implemented capabilities
@@ -55,6 +55,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Optional immutable loading and strict validation of PortfoTrack's schema 1.0 local
   allocation export before external calls. Missing context preserves price-only mode;
   age 0–7 days is current, 8–30 days is stale, and 31+ days expires allocation use.
+- Optional GitHub Actions secret transport restores PortfoTrack context with
+  restrictive file permissions without committing or logging portfolio amounts.
 
 ## Update rule
 

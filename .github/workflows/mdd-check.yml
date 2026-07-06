@@ -32,5 +32,15 @@ jobs:
       - name: Install dependencies
         run: pip install .
 
+      - name: Restore PortfoTrack context
+        env:
+          PORTFOTRACK_CONTEXT_B64: ${{ secrets.PORTFOTRACK_CONTEXT_B64 }}
+        run: |
+          if [ -n "$PORTFOTRACK_CONTEXT_B64" ]; then
+            umask 077
+            printf '%s' "$PORTFOTRACK_CONTEXT_B64" \
+              | base64 --decode > config/portfotrack_context.json
+          fi
+
       - name: Run MDD check
         run: python src/main.py

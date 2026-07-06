@@ -20,14 +20,15 @@ code:
 
 PeakGuard runs from `.github/workflows/mdd-check.yml` using `python src/main.py`. The workflow can also be started manually with `workflow_dispatch`.
 
-## Required secrets
+## GitHub Actions secrets
 
-| Variable | Purpose |
-| --- | --- |
-| `TELEGRAM_BOT_TOKEN` | Authorizes the Telegram Bot API request |
-| `TELEGRAM_CHAT_ID` | Selects the report destination |
-| `GIST_PAT` | Authorizes GitHub Gist reads and writes |
-| `GIST_ID` | Selects the Gist containing `peak_prices.csv` |
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `TELEGRAM_BOT_TOKEN` | Yes | Authorizes the Telegram Bot API request |
+| `TELEGRAM_CHAT_ID` | Yes | Selects the report destination |
+| `GIST_PAT` | Yes | Authorizes GitHub Gist reads and writes |
+| `GIST_ID` | Yes | Selects the Gist containing `peak_prices.csv` |
+| `PORTFOTRACK_CONTEXT_B64` | No | Carries a Base64-encoded PortfoTrack export into the ephemeral runner |
 
 Secrets are supplied through environment variables. They must not appear in configuration, logs, fixtures, documentation examples, or committed files.
 
@@ -40,6 +41,29 @@ price-only operation. An existing malformed, unsupported, internally inconsisten
 or future-dated export aborts before Gist, provider, or Telegram calls. Context that
 is 8–30 days old is stale; context at least 31 days old disables future allocation
 guidance while preserving price-only processing.
+
+### Publish context to Actions
+
+After exporting an explicitly selected PortfoTrack snapshot, update the repository
+secret directly from the file without writing an encoded copy to disk:
+
+```bash
+base64 < /path/to/portfotrack-allocation-YYYY-MM-DD-v1.json \
+  | tr -d '\n' \
+  | gh secret set PORTFOTRACK_CONTEXT_B64 --repo OWNER/PeakGuard
+```
+
+GitHub Actions secrets are limited to 48 KB, and Base64 expands input size. Keep the
+source export below approximately 36 KB. The export is expected to be much smaller.
+
+The workflow exposes this secret only to the restore step, applies `umask 077`, and
+decodes it to `config/portfotrack_context.json` before running PeakGuard. Neither the
+encoded secret nor decoded JSON may be printed. The runner is ephemeral; no context
+file is committed or uploaded as an artifact.
+
+Refreshing the PortfoTrack snapshot does not automatically refresh the secret. Run
+the command again whenever allocation context should change. The existing freshness
+policy warns after 7 days and disables allocation guidance after 30 days.
 
 ## Persistence
 
