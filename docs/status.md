@@ -28,7 +28,7 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - The pipeline reads and writes `peak_prices.csv` in a GitHub Gist.
 - Portfolio and alert limits are loaded from `config/portfolio.yaml`.
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
-- Tests: **332 passed** on 2026-07-07.
+- Tests: **337 passed** on 2026-07-07.
 - Pre-commit: all configured hooks passed on 2026-07-07.
 
 ## Implemented capabilities
@@ -59,7 +59,10 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
   restrictive file permissions without committing or logging portfolio amounts.
 - Pure `PortfolioAction` classification remains separate from `ReviewLevel`, with
   above-range `NO_ADD` precedence and table-tested ETF, thesis, and watch policies;
-  mapping and report integration are not yet connected.
+  current or stale PortfoTrack groups are now resolved during daily orchestration
+  and the resulting allocation facts and action reach `TickerSummary`. Missing,
+  unknown, and expired mappings preserve price-only behavior. Telegram rendering is
+  not yet connected.
 
 ## Update rule
 

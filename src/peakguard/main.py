@@ -10,7 +10,7 @@ import os
 from datetime import date, timedelta
 from pathlib import Path
 
-from peakguard.config import load_alert_thresholds, load_portfolio
+from peakguard.config import TickerConfig, load_alert_thresholds, load_portfolio
 from peakguard.errors import (
     FetchError,
     GistError,
@@ -27,6 +27,7 @@ from peakguard.mdd_calc import (
     check_threshold,
     derive_review_level,
     get_rolling_ath,
+    ReviewLevel,
     update_price_history,
 )
 from peakguard.notifier import (
@@ -36,7 +37,13 @@ from peakguard.notifier import (
     TickerSummary,
     send_daily_summary,
 )
-from peakguard.portfolio_context import ContextFreshness, load_portfolio_context
+from peakguard.portfolio_action import PortfolioAction, derive_portfolio_action
+from peakguard.portfolio_context import (
+    AllocationGroup,
+    ContextFreshness,
+    PortfolioContext,
+    load_portfolio_context,
+)
 from peakguard.storage import ClosingPrice, deserialize_history, serialize_history
 
 __all__ = ["run"]
@@ -53,6 +60,51 @@ _PORTFOTRACK_CONTEXT_PATH = (
 )
 _GIST_FILENAME = "peak_prices.csv"
 _WINDOW_DAYS = 365
+
+
+def _resolve_portfolio_guidance(
+    *,
+    config: TickerConfig,
+    review_level: ReviewLevel,
+    context: PortfolioContext | None,
+    freshness: ContextFreshness | None,
+) -> tuple[AllocationGroup | None, PortfolioAction | None]:
+    """Resolve configured allocation facts and derive separate guidance.
+
+    Args:
+        config: Asset configuration containing the optional stable group ID.
+        review_level: Price-derived review state for the asset.
+        context: Optional validated PortfoTrack snapshot.
+        freshness: Snapshot usability relative to the current run date.
+
+    Returns:
+        The resolved allocation group and derived action. Both are ``None`` when
+        context is absent or expired, or when the configured group is missing or
+        unknown, preserving price-only behavior.
+    """
+    if (
+        context is None
+        or freshness is ContextFreshness.EXPIRED
+        or config.portfolio_group is None
+    ):
+        return None, None
+
+    allocation_group = context.groups.get(config.portfolio_group)
+    if allocation_group is None:
+        logger.warning(
+            "No PortfoTrack group %s found for %s; using price-only mode",
+            config.portfolio_group,
+            config.ticker,
+        )
+        return None, None
+
+    action = derive_portfolio_action(
+        review_level=review_level,
+        allocation_status=allocation_group.status,
+        asset_type=config.asset_type,
+        thesis_required=config.thesis_required,
+    )
+    return allocation_group, action
 
 
 def _load_history_from_gist() -> dict[str, list[ClosingPrice]]:
@@ -172,17 +224,18 @@ def run() -> None:
     configs = load_portfolio(_CONFIG_PATH)
     alert_limits = load_alert_thresholds(_CONFIG_PATH)
     portfolio_context = load_portfolio_context(_PORTFOTRACK_CONTEXT_PATH)
+    context_freshness: ContextFreshness | None = None
     if portfolio_context is None:
         logger.info("No PortfoTrack context supplied; using price-only mode")
     else:
-        freshness = portfolio_context.freshness(date.today())
-        if freshness is ContextFreshness.STALE:
+        context_freshness = portfolio_context.freshness(date.today())
+        if context_freshness is ContextFreshness.STALE:
             logger.warning(
                 "PortfoTrack context is stale as of %s; allocation guidance "
                 "will require a warning",
                 portfolio_context.as_of,
             )
-        elif freshness is ContextFreshness.EXPIRED:
+        elif context_freshness is ContextFreshness.EXPIRED:
             logger.warning(
                 "PortfoTrack context expired as of %s; allocation guidance disabled",
                 portfolio_context.as_of,
@@ -276,6 +329,12 @@ def run() -> None:
                 zscore_alert=zscore_alert,
                 bounce_alert=False,
             )
+            allocation_group, portfolio_action = _resolve_portfolio_guidance(
+                config=cfg,
+                review_level=review_level,
+                context=portfolio_context,
+                freshness=context_freshness,
+            )
             summary = TickerSummary(
                 ticker=ticker,
                 name=cfg.name,
@@ -295,6 +354,8 @@ def run() -> None:
                 review_level=review_level,
                 asset_type=cfg.asset_type,
                 thesis_required=cfg.thesis_required,
+                allocation_group=allocation_group,
+                portfolio_action=portfolio_action,
             )
         else:
             drawdown = calculate_drawdown(current_price, new_ath)
@@ -317,6 +378,12 @@ def run() -> None:
                 zscore_alert=zscore_alert,
                 bounce_alert=bounce_alert,
             )
+            allocation_group, portfolio_action = _resolve_portfolio_guidance(
+                config=cfg,
+                review_level=review_level,
+                context=portfolio_context,
+                freshness=context_freshness,
+            )
 
             summary = TickerSummary(
                 ticker=ticker,
@@ -337,6 +404,8 @@ def run() -> None:
                 review_level=review_level,
                 asset_type=cfg.asset_type,
                 thesis_required=cfg.thesis_required,
+                allocation_group=allocation_group,
+                portfolio_action=portfolio_action,
             )
 
         summaries.append(summary)

@@ -183,8 +183,8 @@ Objective: combine PeakGuard price signals with PortfoTrack allocation context w
 
 ### Mapping and classification
 
-- [ ] Resolve optional ticker and proxy mappings to PortfoTrack asset-class names.
-- [ ] Preserve price-only behavior for missing mappings and unknown groups.
+- [x] Resolve optional ticker and proxy mappings to PortfoTrack asset-class names.
+- [x] Preserve price-only behavior for missing mappings and unknown groups.
 - [x] Keep price-derived `ReviewLevel` separate from portfolio-derived `PortfolioAction`.
 - [x] Classify below-range ETF asset types as `REBALANCE_CANDIDATE` and other discounted assets as `ACTION_REVIEW`.
 - [x] Classify within-range discounted assets as `WATCH`.

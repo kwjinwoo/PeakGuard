@@ -16,6 +16,8 @@ import requests
 from peakguard.config import AssetType
 from peakguard.errors import FetchFailureCause, NotificationError
 from peakguard.mdd_calc import ReviewLevel
+from peakguard.portfolio_action import PortfolioAction
+from peakguard.portfolio_context import AllocationGroup
 
 __all__ = [
     "FetchErrorData",
@@ -105,6 +107,8 @@ class TickerSummary:
         review_level: Highest-priority investment-review state.
         asset_type: Optional category used to select review language.
         thesis_required: Whether an individual stock requires thesis review.
+        allocation_group: Resolved PortfoTrack allocation facts, when usable.
+        portfolio_action: Allocation guidance derived separately from price state.
 
     Raises:
         ValueError: If ticker is empty.
@@ -128,6 +132,8 @@ class TickerSummary:
     review_level: ReviewLevel = ReviewLevel.NONE
     asset_type: AssetType | None = None
     thesis_required: bool = False
+    allocation_group: AllocationGroup | None = None
+    portfolio_action: PortfolioAction | None = None
 
     def __post_init__(self) -> None:
         if not self.ticker or not self.ticker.strip():

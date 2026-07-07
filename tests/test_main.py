@@ -1,6 +1,6 @@
 """Tests for main module — consolidated daily summary orchestration."""
 
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -21,6 +21,12 @@ from peakguard.notifier import (
     HealthStatus,
     RunHealth,
     TickerSummary,
+)
+from peakguard.portfolio_action import PortfolioAction
+from peakguard.portfolio_context import (
+    AllocationGroup,
+    AllocationStatus,
+    PortfolioContext,
 )
 from peakguard.storage import ClosingPrice
 
@@ -85,6 +91,84 @@ _METRICS_HISTORY_CSV = (
 
 class TestRun:
     """Tests for the run() orchestration with consolidated daily summary."""
+
+    @pytest.mark.parametrize(
+        ("context_age_days", "portfolio_group", "expected_action"),
+        [
+            (0, "us_equity", PortfolioAction.NO_ADD),
+            (8, "us_equity", PortfolioAction.NO_ADD),
+            (31, "us_equity", None),
+            (0, "unknown_group", None),
+            (0, None, None),
+        ],
+    )
+    def test_maps_usable_portfolio_context_to_summary_action(
+        self,
+        mocker,
+        context_age_days: int,
+        portfolio_group: str | None,
+        expected_action: PortfolioAction | None,
+    ) -> None:
+        """Only mapped, unexpired allocation facts produce portfolio actions."""
+        today = date.today()
+        context = PortfolioContext(
+            schema_version="1.0",
+            as_of=today - timedelta(days=context_age_days),
+            currency="KRW",
+            total_assets=100,
+            groups={
+                "us_equity": AllocationGroup(
+                    asset_id="us_equity",
+                    current_amount=100,
+                    current_weight=1.0,
+                    target_weight=1.0,
+                    target_lower=0.0,
+                    target_upper=0.9,
+                    drift_percentage_points=0.0,
+                    status=AllocationStatus.ABOVE_TOLERANCE,
+                )
+            },
+        )
+        mocker.patch("peakguard.main.load_portfolio_context", return_value=context)
+        mocker.patch(
+            "peakguard.main.load_portfolio",
+            return_value=[
+                TickerConfig(
+                    ticker="AMZN",
+                    name="Amazon",
+                    threshold=10.0,
+                    asset_type=AssetType.INDIVIDUAL_STOCK,
+                    portfolio_group=portfolio_group,
+                    thesis_required=True,
+                )
+            ],
+        )
+        mocker.patch(
+            "peakguard.main.load_alert_thresholds",
+            return_value=AlertThresholds(
+                days_since_ath_limit=180,
+                zscore_threshold=-2.0,
+                bounce_from_bottom_min=3.0,
+            ),
+        )
+        mocker.patch("peakguard.main.read_gist", return_value=_HISTORY_CSV)
+        mocker.patch(
+            "peakguard.main.fetch_price",
+            return_value=PriceResult(
+                ticker="AMZN", price=440.0, fetched_at=date(2026, 3, 6)
+            ),
+        )
+        mocker.patch("peakguard.main.write_gist")
+        mock_send_summary = mocker.patch("peakguard.main.send_daily_summary")
+
+        from peakguard.main import run
+
+        run()
+
+        summary = mock_send_summary.call_args.args[0][0]
+        assert summary.review_level is ReviewLevel.WATCH
+        assert summary.portfolio_action is expected_action
+        assert (summary.allocation_group is not None) is (expected_action is not None)
 
     def test_invalid_portfolio_context_fails_before_external_calls(
         self, mocker

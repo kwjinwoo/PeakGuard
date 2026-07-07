@@ -11,8 +11,11 @@ related:
   - ../roadmap.md
 code:
   - src/peakguard/portfolio_action.py
+  - src/peakguard/main.py
+  - src/peakguard/notifier.py
 tests:
   - tests/test_portfolio_action.py
+  - tests/test_main.py
 ---
 
 # Portfolio Actions
@@ -43,6 +46,8 @@ market exposure and does not determine allocation policy.
 ## Boundary
 
 The pure classifier assumes that freshness and `portfolio_group` resolution have
-already succeeded. Missing, expired, or unknown context must bypass this function and
-preserve price-only behavior. Mapping, orchestration, and Telegram rendering remain
+already succeeded. Daily orchestration resolves the configured stable PortfoTrack
+`asset_id` directly and attaches both the group facts and derived action to
+`TickerSummary` for current and stale context. Missing, expired, or unknown context
+bypasses the classifier and preserves price-only behavior. Telegram rendering remains
 separate Phase 4 work.
