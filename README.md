@@ -10,7 +10,8 @@ all powered by GitHub Actions with no server required.
 
 Optional PortfoTrack context enriches alerts only for configured individual stocks
 and ETFs that already have an active signal. PeakGuard does not list the complete
-PortfoTrack portfolio or turn quiet assets into report entries.
+PortfoTrack portfolio or turn quiet assets into report entries. Each eligible alert
+uses two compact allocation lines, with one shared warning when the snapshot is stale.
 
 ---
 

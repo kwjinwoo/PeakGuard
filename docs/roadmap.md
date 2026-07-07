@@ -67,7 +67,7 @@ For verified current behavior and known gaps, see [Current status](status.md). D
 | 1 | Reliability and data safety | Complete | Never evaluate signals from invalid persistence state |
 | 2 | Discount signal model | Complete | Convert raw metrics into investment-review levels |
 | 3 | Asset taxonomy | Complete | Classify the supported US-exposure stock and ETF universe |
-| 4 | Portfolio-aware alerts | Planned | Combine price signals with PortfoTrack allocation state |
+| 4 | Portfolio-aware alerts | Complete | Combine price signals with PortfoTrack allocation state |
 | 5 | Reporting and UX | Planned | Produce concise, non-prescriptive review prompts |
 | 6 | Maintenance and documentation | Ongoing | Keep behavior understandable to humans and LLM agents |
 
@@ -203,19 +203,19 @@ Approximate available-room and rebalance-amount calculations are deferred; PeakG
 
 ### Reporting and tests
 
-- [ ] For each reportable individual stock or ETF, show its mapped group, current weight, target range, status, action, and stale warning separately from price metrics.
-- [ ] Never enumerate the full PortfoTrack asset/group list or make a quiet ticker reportable from allocation context alone.
-- [ ] Use thesis language for individual stocks and rebalance language for ETF proxies.
-- [ ] Test valid, missing, malformed, unsupported-version, unknown-group, stale context, quiet-ticker, and unrelated-group paths.
+- [x] For each reportable individual stock or ETF, show its mapped group, current weight, target range, status, action, and stale warning separately from price metrics.
+- [x] Never enumerate the full PortfoTrack asset/group list, enrich legacy untyped entries, or make a quiet ticker reportable from allocation context alone.
+- [x] Use thesis language for individual stocks and rebalance language for ETF proxies.
+- [x] Test valid, missing, malformed, unsupported-version, unknown-group, stale context, quiet-ticker, and unrelated-group paths.
 - [x] Test `below_range`, `within_range`, and `above_range` action classification.
-- [ ] Keep all provider, Telegram, and Gist calls mocked.
+- [x] Keep all provider, Telegram, and Gist calls mocked.
 
 ### Completion criteria
 
-- [ ] Price attractiveness and allocation room are shown as separate facts.
-- [ ] Allocation guardrails override attractive-price wording.
-- [ ] Deep-discount individual-stock prompts with thesis policy require thesis review.
-- [ ] ETF prompts use rebalance-oriented language.
+- [x] Price attractiveness and allocation room are shown as separate facts.
+- [x] Allocation guardrails override attractive-price wording.
+- [x] Deep-discount individual-stock prompts with thesis policy require thesis review.
+- [x] ETF prompts use rebalance-oriented language.
 
 ## Phase 5 — Reporting and UX
 
@@ -224,23 +224,23 @@ Objective: make Telegram reports concise, useful on mobile, and difficult to mis
 ### Report structure
 
 - [ ] Group reportable individual-stock and ETF entries into `Action Review`, `Watch Only`, and optional `No Action` sections.
-- [ ] Keep price signal, portfolio context, and suggested review visually separate.
-- [ ] Keep portfolio context compact and scoped to its reportable ticker; do not add a full-portfolio section.
+- [x] Keep price signal, portfolio context, and suggested review visually separate.
+- [x] Keep portfolio context compact and scoped to its reportable ticker; do not add a full-portfolio section.
 - [x] Add a compact data-health section.
-- [ ] Keep the consolidated single-message delivery model.
+- [x] Keep the consolidated single-message delivery model.
 
 ### Language policy
 
 - [ ] Avoid `buy now`, `strong buy`, `sell`, `exit`, `must add`, and equivalent prescriptive wording.
-- [ ] Prefer `review`, `check thesis`, `consider in next rebalance`, `watch only`, `no action`, and `allocation guardrail active`.
-- [ ] Use thesis language for stocks, rebalance language for ETFs, duration-risk language for bond ETFs, and hedge-allocation language for gold.
+- [x] Prefer `review`, `check thesis`, `consider in next rebalance`, `watch only`, `no action`, and `allocation guardrail active`.
+- [x] Use thesis language for stocks, rebalance language for ETFs, duration-risk language for bond ETFs, and hedge-allocation language for gold.
 - [ ] Add formatting tests that protect the language policy.
 
 ### Completion criteria
 
-- [ ] Reports lead with the review level and retain supporting raw metrics.
-- [ ] No report line reads as automatic trading advice.
-- [ ] Reports remain readable in a mobile Telegram client.
+- [x] Reports lead with the review level and retain supporting raw metrics.
+- [x] No report line reads as automatic trading advice.
+- [x] Reports remain readable in a mobile Telegram client and the configured seven-asset worst case stays within Telegram's 4,096-character limit.
 
 ## Phase 6 — Maintenance and documentation
 

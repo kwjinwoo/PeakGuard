@@ -96,5 +96,6 @@ A future snapshot date is invalid. A missing file preserves price-only operation
 Existing malformed, unsupported, or internally inconsistent files fail before
 external calls rather than being silently ignored.
 
-Current orchestration resolves usable mapped groups and derives portfolio actions,
-but Telegram formatting does not yet render those allocation facts.
+Current orchestration resolves usable mapped groups and derives portfolio actions.
+Telegram formatting renders those facts only for already-reportable configured
+stocks and ETFs, with one report-level warning when used context is stale.

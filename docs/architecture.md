@@ -56,9 +56,9 @@ Domain code must remain deterministic and unaware of files, environment variable
 
 The PortfoTrack context boundary is a local, read-only loader connected before remote
 I/O. Orchestration classifies freshness, resolves only configured group mappings,
-and derives portfolio actions. Telegram allocation rendering is not yet implemented.
-PortfoTrack remains responsible for all allocation calculations and full-portfolio
-presentation.
+and derives portfolio actions. Telegram renders compact allocation facts only for
+already-reportable tickers and emits a stale warning once per report. PortfoTrack
+remains responsible for all allocation calculations and full-portfolio presentation.
 
 ## Design constraints
 

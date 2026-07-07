@@ -93,13 +93,20 @@ class TestRun:
     """Tests for the run() orchestration with consolidated daily summary."""
 
     @pytest.mark.parametrize(
-        ("context_age_days", "portfolio_group", "expected_action"),
+        (
+            "context_age_days",
+            "portfolio_group",
+            "asset_type",
+            "expected_action",
+            "expected_stale",
+        ),
         [
-            (0, "us_equity", PortfolioAction.NO_ADD),
-            (8, "us_equity", PortfolioAction.NO_ADD),
-            (31, "us_equity", None),
-            (0, "unknown_group", None),
-            (0, None, None),
+            (0, "us_equity", AssetType.INDIVIDUAL_STOCK, PortfolioAction.NO_ADD, False),
+            (8, "us_equity", AssetType.INDIVIDUAL_STOCK, PortfolioAction.NO_ADD, True),
+            (31, "us_equity", AssetType.INDIVIDUAL_STOCK, None, False),
+            (0, "unknown_group", AssetType.INDIVIDUAL_STOCK, None, False),
+            (0, None, AssetType.INDIVIDUAL_STOCK, None, False),
+            (0, "us_equity", None, None, False),
         ],
     )
     def test_maps_usable_portfolio_context_to_summary_action(
@@ -107,7 +114,9 @@ class TestRun:
         mocker,
         context_age_days: int,
         portfolio_group: str | None,
+        asset_type: AssetType | None,
         expected_action: PortfolioAction | None,
+        expected_stale: bool,
     ) -> None:
         """Only mapped, unexpired allocation facts produce portfolio actions."""
         today = date.today()
@@ -137,9 +146,9 @@ class TestRun:
                     ticker="AMZN",
                     name="Amazon",
                     threshold=10.0,
-                    asset_type=AssetType.INDIVIDUAL_STOCK,
+                    asset_type=asset_type,
                     portfolio_group=portfolio_group,
-                    thesis_required=True,
+                    thesis_required=asset_type is AssetType.INDIVIDUAL_STOCK,
                 )
             ],
         )
@@ -169,6 +178,7 @@ class TestRun:
         assert summary.review_level is ReviewLevel.WATCH
         assert summary.portfolio_action is expected_action
         assert (summary.allocation_group is not None) is (expected_action is not None)
+        assert summary.portfolio_context_stale is expected_stale
 
     def test_invalid_portfolio_context_fails_before_external_calls(
         self, mocker

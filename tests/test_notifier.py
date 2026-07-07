@@ -18,6 +18,26 @@ from peakguard.notifier import (
     format_daily_summary,
     send_daily_summary,
 )
+from peakguard.portfolio_action import PortfolioAction
+from peakguard.portfolio_context import AllocationGroup, AllocationStatus
+
+
+def _allocation_group(
+    *,
+    asset_id: str = "us_equity",
+    status: AllocationStatus = AllocationStatus.ABOVE_TOLERANCE,
+) -> AllocationGroup:
+    """Build allocation facts for notifier formatting tests."""
+    return AllocationGroup(
+        asset_id=asset_id,
+        current_amount=180,
+        current_weight=0.18,
+        target_weight=0.15,
+        target_lower=0.14,
+        target_upper=0.17,
+        drift_percentage_points=3.0,
+        status=status,
+    )
 
 
 class TestRunHealth:
@@ -402,6 +422,164 @@ class TestTickerSummary:
 
 class TestFormatDailySummary:
     """Tests for the format_daily_summary pure function."""
+
+    def test_reportable_ticker_shows_compact_portfolio_context(self) -> None:
+        """Mapped allocation facts enrich an existing ticker alert compactly."""
+        summary = TickerSummary(
+            ticker="AMZN",
+            name="Amazon",
+            current_price=80.0,
+            ath=100.0,
+            mdd_pct=20.0,
+            days_since_ath=30,
+            days_since_ath_limit=180,
+            bounce_pct=0.0,
+            mdd_alert=True,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+            review_level=ReviewLevel.ATTRACTIVE,
+            asset_type=AssetType.INDIVIDUAL_STOCK,
+            allocation_group=_allocation_group(),
+            portfolio_action=PortfolioAction.NO_ADD,
+        )
+
+        result = format_daily_summary([summary], date(2026, 7, 7))
+
+        assert "배분: us_equity 18.0% · 목표 14.0%–17.0% · 목표 상단 초과" in result
+        assert "배분 검토: 추가 배분 보류" in result
+
+    @pytest.mark.parametrize(
+        ("action", "label"),
+        [
+            (PortfolioAction.REBALANCE_CANDIDATE, "다음 리밸런싱 검토"),
+            (PortfolioAction.ACTION_REVIEW, "배분 여력 검토"),
+            (PortfolioAction.WATCH, "관찰 유지"),
+            (PortfolioAction.NO_ADD, "추가 배분 보류"),
+            (PortfolioAction.THESIS_CHECK, "투자 논거 우선 점검"),
+        ],
+    )
+    def test_portfolio_action_uses_non_prescriptive_review_language(
+        self, action: PortfolioAction, label: str
+    ) -> None:
+        """Portfolio actions render as review prompts rather than trade orders."""
+        summary = TickerSummary(
+            ticker="AMZN",
+            name="Amazon",
+            current_price=80.0,
+            ath=100.0,
+            mdd_pct=20.0,
+            days_since_ath=30,
+            days_since_ath_limit=180,
+            bounce_pct=0.0,
+            mdd_alert=True,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+            review_level=ReviewLevel.ATTRACTIVE,
+            asset_type=AssetType.INDIVIDUAL_STOCK,
+            allocation_group=_allocation_group(),
+            portfolio_action=action,
+        )
+
+        result = format_daily_summary([summary], date(2026, 7, 7))
+
+        assert f"배분 검토: {label}" in result
+
+    def test_configured_universe_worst_case_fits_one_telegram_message(self) -> None:
+        """Seven fully alerted configured assets remain under Telegram's limit."""
+        summaries = [
+            TickerSummary(
+                ticker=ticker,
+                name=ticker,
+                current_price=80.0,
+                ath=100.0,
+                mdd_pct=20.0,
+                days_since_ath=200,
+                days_since_ath_limit=180,
+                bounce_pct=10.0,
+                mdd_alert=True,
+                ath_stale_alert=True,
+                bounce_alert=True,
+                ath_updated=True,
+                zscore=-2.5,
+                zscore_alert=True,
+                review_level=ReviewLevel.DEEP_DISCOUNT,
+                asset_type=AssetType.CORE_ETF,
+                allocation_group=_allocation_group(),
+                portfolio_action=PortfolioAction.NO_ADD,
+                portfolio_context_stale=True,
+            )
+            for ticker in (
+                "AMZN",
+                "MSFT",
+                "META",
+                "NVDA",
+                "GOOGL",
+                "360750.KS",
+                "133690.KS",
+            )
+        ]
+
+        result = format_daily_summary(summaries, date(2026, 7, 7))
+
+        assert len(result.encode("utf-16-le")) // 2 <= 4096
+
+    def test_quiet_ticker_and_unrelated_group_are_not_rendered(self) -> None:
+        """Allocation context cannot widen the existing reportable ticker set."""
+        quiet = TickerSummary(
+            ticker="MSFT",
+            name="Microsoft",
+            current_price=100.0,
+            ath=100.0,
+            mdd_pct=None,
+            days_since_ath=None,
+            days_since_ath_limit=None,
+            bounce_pct=None,
+            mdd_alert=False,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+            asset_type=AssetType.INDIVIDUAL_STOCK,
+            allocation_group=_allocation_group(asset_id="unrelated_cash"),
+            portfolio_action=PortfolioAction.WATCH,
+        )
+
+        result = format_daily_summary([quiet], date(2026, 7, 7))
+
+        assert "모든 티커 이상 없음" in result
+        assert "MSFT" not in result
+        assert "unrelated_cash" not in result
+        assert "배분 검토" not in result
+
+    def test_stale_portfolio_warning_is_shown_once(self) -> None:
+        """A stale warning is global even when several reportable tickers use it."""
+        summaries = [
+            TickerSummary(
+                ticker=ticker,
+                name=ticker,
+                current_price=80.0,
+                ath=100.0,
+                mdd_pct=20.0,
+                days_since_ath=30,
+                days_since_ath_limit=180,
+                bounce_pct=0.0,
+                mdd_alert=True,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+                review_level=ReviewLevel.ATTRACTIVE,
+                asset_type=AssetType.CORE_ETF,
+                allocation_group=_allocation_group(),
+                portfolio_action=PortfolioAction.NO_ADD,
+                portfolio_context_stale=True,
+            )
+            for ticker in ("SPY", "QQQ")
+        ]
+
+        result = format_daily_summary(summaries, date(2026, 7, 7))
+
+        assert result.count("PortfoTrack 배분 정보가 오래되었습니다") == 1
 
     def test_header_contains_date(self) -> None:
         """The summary header includes the report date."""

@@ -68,7 +68,7 @@ def _resolve_portfolio_guidance(
     review_level: ReviewLevel,
     context: PortfolioContext | None,
     freshness: ContextFreshness | None,
-) -> tuple[AllocationGroup | None, PortfolioAction | None]:
+) -> tuple[AllocationGroup | None, PortfolioAction | None, bool]:
     """Resolve configured allocation facts and derive separate guidance.
 
     Args:
@@ -78,7 +78,8 @@ def _resolve_portfolio_guidance(
         freshness: Snapshot usability relative to the current run date.
 
     Returns:
-        The resolved allocation group and derived action. Both are ``None`` when
+        The resolved allocation group, derived action, and stale-warning flag.
+        Group and action are ``None`` when
         context is absent or expired, or when the configured group is missing or
         unknown, preserving price-only behavior.
     """
@@ -86,8 +87,9 @@ def _resolve_portfolio_guidance(
         context is None
         or freshness is ContextFreshness.EXPIRED
         or config.portfolio_group is None
+        or config.asset_type is None
     ):
-        return None, None
+        return None, None, False
 
     allocation_group = context.groups.get(config.portfolio_group)
     if allocation_group is None:
@@ -96,7 +98,7 @@ def _resolve_portfolio_guidance(
             config.portfolio_group,
             config.ticker,
         )
-        return None, None
+        return None, None, False
 
     action = derive_portfolio_action(
         review_level=review_level,
@@ -104,7 +106,7 @@ def _resolve_portfolio_guidance(
         asset_type=config.asset_type,
         thesis_required=config.thesis_required,
     )
-    return allocation_group, action
+    return allocation_group, action, freshness is ContextFreshness.STALE
 
 
 def _load_history_from_gist() -> dict[str, list[ClosingPrice]]:
@@ -329,7 +331,11 @@ def run() -> None:
                 zscore_alert=zscore_alert,
                 bounce_alert=False,
             )
-            allocation_group, portfolio_action = _resolve_portfolio_guidance(
+            (
+                allocation_group,
+                portfolio_action,
+                portfolio_context_stale,
+            ) = _resolve_portfolio_guidance(
                 config=cfg,
                 review_level=review_level,
                 context=portfolio_context,
@@ -356,6 +362,7 @@ def run() -> None:
                 thesis_required=cfg.thesis_required,
                 allocation_group=allocation_group,
                 portfolio_action=portfolio_action,
+                portfolio_context_stale=portfolio_context_stale,
             )
         else:
             drawdown = calculate_drawdown(current_price, new_ath)
@@ -378,7 +385,11 @@ def run() -> None:
                 zscore_alert=zscore_alert,
                 bounce_alert=bounce_alert,
             )
-            allocation_group, portfolio_action = _resolve_portfolio_guidance(
+            (
+                allocation_group,
+                portfolio_action,
+                portfolio_context_stale,
+            ) = _resolve_portfolio_guidance(
                 config=cfg,
                 review_level=review_level,
                 context=portfolio_context,
@@ -406,6 +417,7 @@ def run() -> None:
                 thesis_required=cfg.thesis_required,
                 allocation_group=allocation_group,
                 portfolio_action=portfolio_action,
+                portfolio_context_stale=portfolio_context_stale,
             )
 
         summaries.append(summary)

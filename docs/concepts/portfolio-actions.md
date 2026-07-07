@@ -51,9 +51,18 @@ already succeeded. Daily orchestration resolves the configured stable PortfoTrac
 `asset_id` directly and attaches both the group facts and derived action to
 `TickerSummary` for current and stale context. Missing, expired, or unknown context
 bypasses the classifier and preserves price-only behavior. Telegram rendering remains
-separate Phase 4 work.
+separate from classification.
 
 Allocation guidance cannot make a ticker reportable. It may be rendered only for a
 configured individual stock or ETF already included by the existing signal and
 review-level rules. The formatter must not traverse or summarize all groups in the
-PortfoTrack context.
+PortfoTrack context. Legacy entries without `asset_type` remain price-only even when
+they declare a `portfolio_group`.
+
+## Report presentation
+
+For an already-reportable ticker with a derived action, Telegram shows two compact
+lines: mapped group weight with target range and status, then a non-prescriptive
+action label. `NO_ADD` becomes “추가 배분 보류,” while thesis and ETF outcomes use
+thesis-review and rebalancing language. Stale mapped context adds one warning to the
+whole report rather than repeating it for every ticker.

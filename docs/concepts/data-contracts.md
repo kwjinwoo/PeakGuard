@@ -74,7 +74,9 @@ validation rules.
 `TickerSummary` aggregates calculated values, alert flags, the leading `ReviewLevel`,
 optional asset policy, and resolved allocation guidance for one configured ticker.
 Only summaries with an active signal or review level are reportable; allocation
-context cannot widen that set. `FetchErrorData` represents a skipped ticker fetch.
+context cannot widen that set. A stale flag lets the formatter emit one shared
+warning without duplicating portfolio context. `FetchErrorData` represents a skipped
+ticker fetch.
 `RunHealth` records fetch counts, Gist read/write status, whether signals were
 evaluated, and whether remote history was updated. `peakguard.notifier` converts
 these values to one plain-text Telegram message.

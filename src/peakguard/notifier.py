@@ -17,7 +17,7 @@ from peakguard.config import AssetType
 from peakguard.errors import FetchFailureCause, NotificationError
 from peakguard.mdd_calc import ReviewLevel
 from peakguard.portfolio_action import PortfolioAction
-from peakguard.portfolio_context import AllocationGroup
+from peakguard.portfolio_context import AllocationGroup, AllocationStatus
 
 __all__ = [
     "FetchErrorData",
@@ -32,6 +32,18 @@ logger = logging.getLogger(__name__)
 
 _TELEGRAM_API_URL = "https://api.telegram.org/bot{token}/sendMessage"
 _REQUEST_TIMEOUT_SECONDS = 10
+_ALLOCATION_STATUS_LABELS = {
+    AllocationStatus.BELOW_TOLERANCE: "목표 하단 미만",
+    AllocationStatus.WITHIN_TOLERANCE: "목표 범위 내",
+    AllocationStatus.ABOVE_TOLERANCE: "목표 상단 초과",
+}
+_PORTFOLIO_ACTION_LABELS = {
+    PortfolioAction.REBALANCE_CANDIDATE: "다음 리밸런싱 검토",
+    PortfolioAction.ACTION_REVIEW: "배분 여력 검토",
+    PortfolioAction.WATCH: "관찰 유지",
+    PortfolioAction.NO_ADD: "추가 배분 보류",
+    PortfolioAction.THESIS_CHECK: "투자 논거 우선 점검",
+}
 
 
 class HealthStatus(Enum):
@@ -109,6 +121,7 @@ class TickerSummary:
         thesis_required: Whether an individual stock requires thesis review.
         allocation_group: Resolved PortfoTrack allocation facts, when usable.
         portfolio_action: Allocation guidance derived separately from price state.
+        portfolio_context_stale: Whether mapped allocation facts are 8–30 days old.
 
     Raises:
         ValueError: If ticker is empty.
@@ -134,6 +147,7 @@ class TickerSummary:
     thesis_required: bool = False
     allocation_group: AllocationGroup | None = None
     portfolio_action: PortfolioAction | None = None
+    portfolio_context_stale: bool = False
 
     def __post_init__(self) -> None:
         if not self.ticker or not self.ticker.strip():
@@ -189,6 +203,27 @@ def _asset_review_prompt(summary: TickerSummary) -> str | None:
     return None
 
 
+def _format_portfolio_context(summary: TickerSummary) -> list[str]:
+    """Format compact allocation facts for one already-reportable ticker.
+
+    Args:
+        summary: Reportable ticker with optional mapped allocation guidance.
+
+    Returns:
+        Two compact lines, or an empty list when no action can be interpreted.
+    """
+    group = summary.allocation_group
+    action = summary.portfolio_action
+    if group is None or action is None:
+        return []
+    return [
+        f"배분: {group.asset_id} {group.current_weight:.1%} · "
+        f"목표 {group.target_lower:.1%}–{group.target_upper:.1%} · "
+        f"{_ALLOCATION_STATUS_LABELS[group.status]}",
+        f"배분 검토: {_PORTFOLIO_ACTION_LABELS[action]}",
+    ]
+
+
 def _format_ticker_section(summary: TickerSummary) -> str:
     """Build the message section for a single ticker with active alerts.
 
@@ -217,6 +252,7 @@ def _format_ticker_section(summary: TickerSummary) -> str:
     review_prompt = _asset_review_prompt(summary)
     if review_prompt is not None:
         lines.append(f"검토 관점: {review_prompt}")
+    lines.extend(_format_portfolio_context(summary))
     lines.append(f"상태: {' '.join(status_parts)}")
 
     # Price / ATH line
@@ -284,6 +320,14 @@ def format_daily_summary(
             if i > 0:
                 parts.append("")
             parts.append(_format_ticker_section(summary))
+        if any(
+            summary.portfolio_context_stale
+            and summary.allocation_group is not None
+            and summary.portfolio_action is not None
+            for summary in alert_summaries
+        ):
+            parts.append("")
+            parts.append("⚠️ PortfoTrack 배분 정보가 오래되었습니다 (8–30일 경과).")
 
     if fetch_errors:
         parts.append("")

@@ -30,7 +30,7 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
 - PortfoTrack context does not expand the report universe: quiet configured tickers
   and unrelated portfolio groups remain omitted.
-- Tests: **337 passed** on 2026-07-07.
+- Tests: **347 passed** on 2026-07-07.
 - Pre-commit: all configured hooks passed on 2026-07-07.
 
 ## Implemented capabilities
@@ -63,8 +63,13 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
   above-range `NO_ADD` precedence and table-tested ETF, thesis, and watch policies;
   current or stale PortfoTrack groups are now resolved during daily orchestration
   and the resulting allocation facts and action reach `TickerSummary`. Missing,
-  unknown, and expired mappings preserve price-only behavior. Telegram rendering is
-  not yet connected.
+  unknown, and expired mappings preserve price-only behavior.
+- Reportable configured stocks and ETFs show mapped weight, target range, allocation
+  status, and non-prescriptive portfolio action in two compact lines. Stale context
+  produces one report-level warning. Quiet tickers and unrelated context groups stay
+  omitted, and a worst-case seven-ticker formatting test protects Telegram's
+  4,096-character limit. Legacy untyped entries remain price-only even if they carry
+  a group mapping.
 
 ## Update rule
 
