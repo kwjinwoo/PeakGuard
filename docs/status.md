@@ -3,7 +3,7 @@ id: current-status
 title: Current Status
 type: status
 status: active
-last_verified: 2026-07-06
+last_verified: 2026-07-07
 verified_by:
   - uv run pytest -q
   - uv run pre-commit run --all-files
@@ -28,8 +28,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - The pipeline reads and writes `peak_prices.csv` in a GitHub Gist.
 - Portfolio and alert limits are loaded from `config/portfolio.yaml`.
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
-- Tests: **318 passed** on 2026-07-06.
-- Pre-commit: all configured hooks passed on 2026-07-06.
+- Tests: **332 passed** on 2026-07-07.
+- Pre-commit: all configured hooks passed on 2026-07-07.
 
 ## Implemented capabilities
 
@@ -57,6 +57,9 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
   age 0–7 days is current, 8–30 days is stale, and 31+ days expires allocation use.
 - Optional GitHub Actions secret transport restores PortfoTrack context with
   restrictive file permissions without committing or logging portfolio amounts.
+- Pure `PortfolioAction` classification remains separate from `ReviewLevel`, with
+  above-range `NO_ADD` precedence and table-tested ETF, thesis, and watch policies;
+  mapping and report integration are not yet connected.
 
 ## Update rule
 

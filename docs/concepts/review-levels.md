@@ -3,9 +3,10 @@ id: discount-review-levels
 title: Discount Review Levels
 type: concept
 status: active
-last_verified: 2026-07-05
+last_verified: 2026-07-07
 related:
   - alerts/price-signals.md
+  - portfolio-actions.md
   - ../decisions/0003-discount-review-level-precedence.md
   - ../decisions/0004-separate-price-levels-from-portfolio-actions.md
   - ../roadmap.md

@@ -1,0 +1,48 @@
+---
+id: portfolio-actions
+title: Portfolio Actions
+type: concept
+status: active
+last_verified: 2026-07-07
+related:
+  - review-levels.md
+  - portfolio-context.md
+  - ../decisions/0004-separate-price-levels-from-portfolio-actions.md
+  - ../roadmap.md
+code:
+  - src/peakguard/portfolio_action.py
+tests:
+  - tests/test_portfolio_action.py
+---
+
+# Portfolio Actions
+
+`PortfolioAction` interprets an existing price-review condition within one mapped
+PortfoTrack allocation group. It never changes the price-derived `ReviewLevel`.
+
+## Classification
+
+No action is produced for `ReviewLevel.NONE` or recovery-only
+`ReviewLevel.RECOVERY_WATCH`. For allocation-eligible price levels, precedence is:
+
+| Priority | Condition | Portfolio action |
+| ---: | --- | --- |
+| 1 | Above target range | `NO_ADD` |
+| 2 | Deep-discount individual stock with thesis policy | `THESIS_CHECK` |
+| 3 | Below-range core, bond, or gold ETF | `REBALANCE_CANDIDATE` |
+| 4 | Other below-range asset | `ACTION_REVIEW` |
+| 5 | Within target range | `WATCH` |
+
+`NO_ADD` has highest priority so an attractive price cannot weaken an allocation
+guardrail. When a deep-discount thesis-required stock is not above range,
+`THESIS_CHECK` overrides ordinary below- or within-range guidance.
+
+ETF classification uses `asset_type`, not `proxy_for`. Proxy identity describes
+market exposure and does not determine allocation policy.
+
+## Boundary
+
+The pure classifier assumes that freshness and `portfolio_group` resolution have
+already succeeded. Missing, expired, or unknown context must bypass this function and
+preserve price-only behavior. Mapping, orchestration, and Telegram rendering remain
+separate Phase 4 work.

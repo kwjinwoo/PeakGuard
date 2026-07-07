@@ -185,11 +185,11 @@ Objective: combine PeakGuard price signals with PortfoTrack allocation context w
 
 - [ ] Resolve optional ticker and proxy mappings to PortfoTrack asset-class names.
 - [ ] Preserve price-only behavior for missing mappings and unknown groups.
-- [ ] Keep price-derived `ReviewLevel` separate from portfolio-derived `PortfolioAction`.
-- [ ] Classify below-range ETF proxies as `REBALANCE_CANDIDATE` and other discounted assets as `ACTION_REVIEW`.
-- [ ] Classify within-range discounted assets as `WATCH`.
-- [ ] Classify above-range assets as `NO_ADD`, overriding attractive-price wording.
-- [ ] Classify deep-discount individual stocks with explicit thesis policy as `THESIS_CHECK`.
+- [x] Keep price-derived `ReviewLevel` separate from portfolio-derived `PortfolioAction`.
+- [x] Classify below-range ETF asset types as `REBALANCE_CANDIDATE` and other discounted assets as `ACTION_REVIEW`.
+- [x] Classify within-range discounted assets as `WATCH`.
+- [x] Classify above-range assets as `NO_ADD`, overriding attractive-price wording.
+- [x] Classify deep-discount individual stocks with explicit thesis policy as `THESIS_CHECK` when allocation is not above range.
 
 Approximate available-room and rebalance-amount calculations are deferred; PeakGuard reports PortfoTrack allocation facts without becoming a rebalancing engine.
 
@@ -198,7 +198,7 @@ Approximate available-room and rebalance-amount calculations are deferred; PeakG
 - [ ] Show portfolio group, current weight, target range, status, action, and stale warning separately from price metrics.
 - [ ] Use thesis language for individual stocks and rebalance language for ETF proxies.
 - [ ] Test valid, missing, malformed, unsupported-version, unknown-group, and stale context paths.
-- [ ] Test `below_range`, `within_range`, and `above_range` action classification.
+- [x] Test `below_range`, `within_range`, and `above_range` action classification.
 - [ ] Keep all provider, Telegram, and Gist calls mocked.
 
 ### Completion criteria

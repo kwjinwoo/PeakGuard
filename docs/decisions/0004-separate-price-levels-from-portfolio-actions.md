@@ -14,12 +14,14 @@ code:
   - src/peakguard/main.py
   - src/peakguard/notifier.py
   - src/peakguard/portfolio_context.py
+  - src/peakguard/portfolio_action.py
 tests:
   - tests/test_mdd_calc.py
   - tests/test_config.py
   - tests/test_main.py
   - tests/test_notifier.py
   - tests/test_portfolio_context.py
+  - tests/test_portfolio_action.py
 ---
 
 # ADR-0004: Separate price levels from portfolio actions
@@ -37,13 +39,14 @@ Keep `ReviewLevel` as the price-derived result defined by ADR-0003. Add a separa
 
 The MVP uses these rules only when fresh, valid context and a known `portfolio_group` are available:
 
-- Below range: ETF proxies become `REBALANCE_CANDIDATE`; other discounted assets become `ACTION_REVIEW`.
+- No price review and recovery-only signals produce no portfolio action.
+- Above range: allocation guardrails produce `NO_ADD` with highest precedence.
+- A non-above-range individual stock with `thesis_required=true` and `ReviewLevel.DEEP_DISCOUNT` becomes `THESIS_CHECK`, overriding ordinary portfolio actions.
+- Below range: core, bond, and gold ETF asset types become `REBALANCE_CANDIDATE`; other discounted assets become `ACTION_REVIEW`.
 - Within range: discounted assets become `WATCH`.
-- Above range: allocation guardrails produce `NO_ADD`.
-- An individual stock with `thesis_required=true` and `ReviewLevel.DEEP_DISCOUNT` becomes `THESIS_CHECK`, overriding ordinary portfolio actions.
 - Missing context, missing mapping, unknown groups, or context at least 31 days old preserve the price-only report without portfolio guidance.
 
-`THESIS_CHECK` remains an explicit policy outcome: asset configuration opts into thesis review, while deep discount supplies the price condition. Price alone does not imply a broken thesis.
+`THESIS_CHECK` remains an explicit policy outcome: asset configuration opts into thesis review, while deep discount supplies the price condition. Price alone does not imply a broken thesis. ETF policy is derived from `asset_type`, not `proxy_for`.
 
 The context contract consumes PortfoTrack's `schema_version: "1.0"` export. Context age is measured from `snapshot.date`: 0–7 days is normal, 8–30 days adds a warning, and 31 or more days disables allocation guidance.
 

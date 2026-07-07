@@ -3,16 +3,18 @@ id: system-architecture
 title: System Overview
 type: architecture
 status: active
-last_verified: 2026-07-06
+last_verified: 2026-07-07
 related:
   - concepts/domain-model.md
   - operations.md
   - decisions/0001-csv-gist-persistence.md
 code:
   - src/peakguard/main.py
+  - src/peakguard/portfolio_action.py
   - src/peakguard/portfolio_context.py
 tests:
   - tests/test_main.py
+  - tests/test_portfolio_action.py
   - tests/test_portfolio_context.py
 ---
 
@@ -39,6 +41,7 @@ Fatal Gist reads skip price evaluation and writes but still attempt a health-onl
 | --- | --- | --- |
 | Orchestration | `peakguard.main` | Coordinates the daily pipeline and partial failures |
 | Domain | `peakguard.mdd_calc` | Pure calculations and rolling-history rules |
+| Portfolio policy | `peakguard.portfolio_action` | Pure allocation-action classification separate from price levels |
 | Configuration | `peakguard.config` | YAML parsing and validation |
 | Portfolio context | `peakguard.portfolio_context` | Optional PortfoTrack schema 1.0 JSON validation and immutable context objects |
 | Storage format | `peakguard.storage` | `ClosingPrice`, CSV conversion, local file I/O |
