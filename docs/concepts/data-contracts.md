@@ -72,8 +72,9 @@ validation rules.
 ## Daily report input
 
 `TickerSummary` aggregates calculated values, alert flags, the leading `ReviewLevel`,
-and optional asset type and thesis policy for one ticker, including an optional
-Z-score and its threshold result. `FetchErrorData` represents a skipped ticker fetch.
+optional asset policy, and resolved allocation guidance for one configured ticker.
+Only summaries with an active signal or review level are reportable; allocation
+context cannot widen that set. `FetchErrorData` represents a skipped ticker fetch.
 `RunHealth` records fetch counts, Gist read/write status, whether signals were
 evaluated, and whether remote history was updated. `peakguard.notifier` converts
 these values to one plain-text Telegram message.

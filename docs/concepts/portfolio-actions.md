@@ -8,6 +8,7 @@ related:
   - review-levels.md
   - portfolio-context.md
   - ../decisions/0004-separate-price-levels-from-portfolio-actions.md
+  - ../decisions/0005-scope-portfolio-context-to-reportable-assets.md
   - ../roadmap.md
 code:
   - src/peakguard/portfolio_action.py
@@ -51,3 +52,8 @@ already succeeded. Daily orchestration resolves the configured stable PortfoTrac
 `TickerSummary` for current and stale context. Missing, expired, or unknown context
 bypasses the classifier and preserves price-only behavior. Telegram rendering remains
 separate Phase 4 work.
+
+Allocation guidance cannot make a ticker reportable. It may be rendered only for a
+configured individual stock or ETF already included by the existing signal and
+review-level rules. The formatter must not traverse or summarize all groups in the
+PortfoTrack context.

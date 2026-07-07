@@ -28,6 +28,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - The pipeline reads and writes `peak_prices.csv` in a GitHub Gist.
 - Portfolio and alert limits are loaded from `config/portfolio.yaml`.
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
+- PortfoTrack context does not expand the report universe: quiet configured tickers
+  and unrelated portfolio groups remain omitted.
 - Tests: **337 passed** on 2026-07-07.
 - Pre-commit: all configured hooks passed on 2026-07-07.
 

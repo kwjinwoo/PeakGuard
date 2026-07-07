@@ -22,6 +22,11 @@ tests:
 
 PeakGuard sends one consolidated daily Telegram report. Only ticker summaries with an active signal or review level are included; fetch failures can be appended separately. Each ticker leads with its [discount review level](../review-levels.md), and a compact data-health section distinguishes successful, partial, and aborted evaluation paths.
 
+Portfolio context does not widen this selection. Planned allocation details may
+enrich a reportable configured individual stock or ETF, but PeakGuard never lists the
+full PortfoTrack portfolio, unrelated allocation groups, or quiet tickers solely due
+to available allocation data. See [ADR-0005](../../decisions/0005-scope-portfolio-context-to-reportable-assets.md).
+
 | Signal | Current condition | Implemented in daily report |
 | --- | --- | --- |
 | MDD | Drawdown is greater than or equal to ticker threshold | Yes |

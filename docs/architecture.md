@@ -8,6 +8,7 @@ related:
   - concepts/domain-model.md
   - operations.md
   - decisions/0001-csv-gist-persistence.md
+  - decisions/0005-scope-portfolio-context-to-reportable-assets.md
 code:
   - src/peakguard/main.py
   - src/peakguard/portfolio_action.py
@@ -30,8 +31,9 @@ PeakGuard is a synchronous Python 3.12+ batch application. GitHub Actions starts
 4. `peakguard.gist_client` reads `peak_prices.csv` from a GitHub Gist.
 5. For each ticker, `peakguard.fetcher` obtains either one year of bootstrap history or the latest close from yfinance.
 6. `peakguard.mdd_calc` updates the rolling history and calculates metrics without performing I/O.
-7. `peakguard.storage` serializes updated history, and `peakguard.gist_client` writes it back to the Gist.
-8. `peakguard.notifier` formats active alerts, fetch failures, and final data health into one Telegram report and sends it.
+7. `peakguard.main` resolves mapped allocation groups and derives portfolio actions without changing which tickers are reportable.
+8. `peakguard.storage` serializes updated history, and `peakguard.gist_client` writes it back to the Gist.
+9. `peakguard.notifier` formats active alerts, fetch failures, and final data health into one Telegram report and sends it.
 
 Fatal Gist reads skip price evaluation and writes but still attempt a health-only report before the error fails the workflow. Gist writes happen before notification so the report describes the actual persistence outcome.
 
@@ -53,9 +55,10 @@ Fatal Gist reads skip price evaluation and writes but still attempt a health-onl
 Domain code must remain deterministic and unaware of files, environment variables, HTTP, yfinance, Telegram, or Gists. Integration modules translate provider failures into typed application errors. The orchestrator decides whether a failure is recoverable for the current run.
 
 The PortfoTrack context boundary is a local, read-only loader connected before remote
-I/O. Orchestration classifies its freshness, but portfolio actions and allocation
-reporting are not yet implemented. PortfoTrack remains responsible for all allocation
-calculations.
+I/O. Orchestration classifies freshness, resolves only configured group mappings,
+and derives portfolio actions. Telegram allocation rendering is not yet implemented.
+PortfoTrack remains responsible for all allocation calculations and full-portfolio
+presentation.
 
 ## Design constraints
 
@@ -64,6 +67,8 @@ calculations.
 - Synchronous network and file I/O with finite timeouts.
 - CSV-in-Gist persistence; no database or ORM.
 - One consolidated Telegram report rather than one message per ticker.
+- Portfolio context enriches only configured individual stocks and ETFs already made
+  reportable by price signals; it never produces a full portfolio inventory.
 - Partial ticker fetch failures do not stop processing other tickers.
 - Fatal persistence failures are reported when Telegram remains available and then propagated.
 

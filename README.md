@@ -8,6 +8,10 @@ PeakGuard monitors a 1-year rolling All-Time High (ATH) for selected tech stocks
 the current drawdown. When user-defined thresholds are breached, it sends alerts via Telegram —
 all powered by GitHub Actions with no server required.
 
+Optional PortfoTrack context enriches alerts only for configured individual stocks
+and ETFs that already have an active signal. PeakGuard does not list the complete
+PortfoTrack portfolio or turn quiet assets into report entries.
+
 ---
 
 ## How It Works

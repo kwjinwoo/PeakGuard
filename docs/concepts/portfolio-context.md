@@ -33,6 +33,15 @@ an existing invalid file raises a native configuration error.
 The file must come from an explicitly selected PortfoTrack snapshot export. PeakGuard
 does not read PortfoTrack persistence files or call PortfoTrack over a network.
 
+## Consumption boundary
+
+The export may contain the complete PortfoTrack allocation, but PeakGuard does not
+render that inventory. It looks up only the group mapped from a configured individual
+stock or ETF that is already reportable because of an active signal or review level.
+Unrelated groups and quiet configured tickers remain absent from the Telegram report.
+Portfolio context enriches an alert and cannot create one. See
+[ADR-0005](../decisions/0005-scope-portfolio-context-to-reportable-assets.md).
+
 ## Schema 1.0
 
 ```json
@@ -87,5 +96,5 @@ A future snapshot date is invalid. A missing file preserves price-only operation
 Existing malformed, unsupported, or internally inconsistent files fail before
 external calls rather than being silently ignored.
 
-Portfolio-action classification is a later Phase 4 step. The current orchestration
-loads and classifies context but does not yet add allocation facts to reports.
+Current orchestration resolves usable mapped groups and derives portfolio actions,
+but Telegram formatting does not yet render those allocation facts.

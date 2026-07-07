@@ -35,6 +35,14 @@ Thesis remains valid -> decide manually
 
 The user-facing framing is always: **Review trigger, not buy signal.**
 
+### Reporting boundary
+
+PeakGuard is not a PortfoTrack portfolio dashboard. Portfolio context enriches an
+existing alert; it never expands the report universe. Telegram output includes only
+configured individual stocks and ETFs that have an active signal or review level in
+the current run. It must not enumerate every PortfoTrack asset or group, nor include
+quiet tickers merely because allocation data exists. See [ADR-0005](decisions/0005-scope-portfolio-context-to-reportable-assets.md).
+
 ### Monitored-universe boundary
 
 Production PeakGuard monitoring is limited by underlying exposure rather than quote
@@ -195,9 +203,10 @@ Approximate available-room and rebalance-amount calculations are deferred; PeakG
 
 ### Reporting and tests
 
-- [ ] Show portfolio group, current weight, target range, status, action, and stale warning separately from price metrics.
+- [ ] For each reportable individual stock or ETF, show its mapped group, current weight, target range, status, action, and stale warning separately from price metrics.
+- [ ] Never enumerate the full PortfoTrack asset/group list or make a quiet ticker reportable from allocation context alone.
 - [ ] Use thesis language for individual stocks and rebalance language for ETF proxies.
-- [ ] Test valid, missing, malformed, unsupported-version, unknown-group, and stale context paths.
+- [ ] Test valid, missing, malformed, unsupported-version, unknown-group, stale context, quiet-ticker, and unrelated-group paths.
 - [x] Test `below_range`, `within_range`, and `above_range` action classification.
 - [ ] Keep all provider, Telegram, and Gist calls mocked.
 
@@ -214,8 +223,9 @@ Objective: make Telegram reports concise, useful on mobile, and difficult to mis
 
 ### Report structure
 
-- [ ] Group entries into `Action Review`, `Watch Only`, and optional `No Action` sections.
+- [ ] Group reportable individual-stock and ETF entries into `Action Review`, `Watch Only`, and optional `No Action` sections.
 - [ ] Keep price signal, portfolio context, and suggested review visually separate.
+- [ ] Keep portfolio context compact and scoped to its reportable ticker; do not add a full-portfolio section.
 - [x] Add a compact data-health section.
 - [ ] Keep the consolidated single-message delivery model.
 
@@ -291,3 +301,6 @@ Data Health
 ```
 
 The intended outcome is to detect when an asset is meaningfully discounted and help determine whether it deserves review within the user's portfolio rules.
+
+The example is one reportable ticker, not a portfolio inventory. Unrelated
+PortfoTrack groups and configured tickers without an active signal remain omitted.

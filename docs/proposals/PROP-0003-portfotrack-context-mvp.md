@@ -37,6 +37,8 @@ PeakGuard can identify price discounts but cannot explain whether the correspond
 - Keep price-derived `ReviewLevel` separate from portfolio-derived `PortfolioAction`.
 - Disable allocation guidance when context is at least 31 days old while retaining price-only alerts.
 - Treat malformed existing context as a clear configuration error rather than silently ignoring it.
+- Use allocation context only to enrich configured individual-stock and ETF alerts;
+  do not enumerate the PortfoTrack portfolio or make quiet tickers reportable.
 
 ## Alternatives
 
@@ -44,6 +46,8 @@ PeakGuard can identify price discounts but cannot explain whether the correspond
 - Merge portfolio actions into `ReviewLevel`: rejected because price condition and allocation guidance answer different questions.
 - Infer thesis failure from price alone: rejected because investment rationale is not observable from market prices.
 - Calculate rebalancing amounts: deferred because PortfoTrack remains the allocation and rebalancing source of truth.
+- Render a full portfolio summary: rejected because PeakGuard is a review-trigger
+  monitor, while PortfoTrack owns portfolio-dashboard behavior.
 
 ## Resolution
 
