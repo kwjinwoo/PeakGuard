@@ -9,6 +9,7 @@ related:
   - proposals/PROP-0003-portfotrack-context-mvp.md
   - concepts/alerts/README.md
   - decisions/README.md
+  - decisions/0006-three-section-report-policy.md
 ---
 
 # Product Roadmap
@@ -68,8 +69,8 @@ For verified current behavior and known gaps, see [Current status](status.md). D
 | 2 | Discount signal model | Complete | Convert raw metrics into investment-review levels |
 | 3 | Asset taxonomy | Complete | Classify the supported US-exposure stock and ETF universe |
 | 4 | Portfolio-aware alerts | Complete | Combine price signals with PortfoTrack allocation state |
-| 5 | Reporting and UX | Planned | Produce concise, non-prescriptive review prompts |
-| 6 | Maintenance and documentation | Ongoing | Keep behavior understandable to humans and LLM agents |
+| 5 | Reporting and UX | Complete | Produce concise, non-prescriptive review prompts |
+| 6 | Maintenance and documentation | Complete | Keep behavior understandable to humans and LLM agents |
 
 A checkbox is complete only when implementation, tests, and affected documentation are all finished. Update [Current status](status.md) only after verification.
 
@@ -223,7 +224,7 @@ Objective: make Telegram reports concise, useful on mobile, and difficult to mis
 
 ### Report structure
 
-- [ ] Group reportable individual-stock and ETF entries into `Action Review`, `Watch Only`, and optional `No Action` sections.
+- [x] Group reportable individual-stock and ETF entries into `Action Review`, `Watch Only`, and optional `No Action` sections.
 - [x] Keep price signal, portfolio context, and suggested review visually separate.
 - [x] Keep portfolio context compact and scoped to its reportable ticker; do not add a full-portfolio section.
 - [x] Add a compact data-health section.
@@ -231,14 +232,14 @@ Objective: make Telegram reports concise, useful on mobile, and difficult to mis
 
 ### Language policy
 
-- [ ] Avoid `buy now`, `strong buy`, `sell`, `exit`, `must add`, and equivalent prescriptive wording.
+- [x] Avoid `buy now`, `strong buy`, `sell`, `exit`, `must add`, and equivalent prescriptive wording.
 - [x] Prefer `review`, `check thesis`, `consider in next rebalance`, `watch only`, `no action`, and `allocation guardrail active`.
 - [x] Use thesis language for stocks, rebalance language for ETFs, duration-risk language for bond ETFs, and hedge-allocation language for gold.
-- [ ] Add formatting tests that protect the language policy.
+- [x] Add formatting tests that protect the language policy.
 
 ### Completion criteria
 
-- [x] Reports lead with the review level and retain supporting raw metrics.
+- [x] Reports lead with a prioritized review section and retain supporting raw metrics where they aid action.
 - [x] No report line reads as automatic trading advice.
 - [x] Reports remain readable in a mobile Telegram client and the configured seven-asset worst case stays within Telegram's 4,096-character limit.
 
@@ -249,16 +250,16 @@ Objective: keep PeakGuard easy to understand and change for humans and LLM agent
 - [x] Establish the `docs/` LLM Wiki with structured frontmatter and a canonical index.
 - [x] Add a repository-local `$peakguard-wiki` read/write and validation skill.
 - [x] Keep `status.md` as a short verified snapshot rather than a second roadmap.
-- [ ] Update the root README to describe PeakGuard as a price-discount and portfolio-review monitor when that behavior is implemented.
-- [ ] Add or update decision records as product constraints become accepted.
-- [ ] Keep README, configuration examples, concepts, and current behavior aligned after every phase.
-- [ ] Update roadmap checkboxes and status only after tests and pre-commit pass.
+- [x] Update the root README to describe PeakGuard as a price-discount and portfolio-review monitor when that behavior is implemented.
+- [x] Add or update decision records as product constraints become accepted.
+- [x] Keep README, configuration examples, concepts, and current behavior aligned after every phase.
+- [x] Update roadmap checkboxes and status only after tests and pre-commit pass.
 
 ### Completion criteria
 
-- [ ] A new maintainer can understand product intent without reading every source file.
-- [ ] Wiki validation detects broken metadata, links, paths, and index coverage.
-- [ ] Completed phases have verification evidence in status or linked decisions.
+- [x] A new maintainer can understand product intent without reading every source file.
+- [x] Wiki validation detects broken metadata, links, paths, and index coverage.
+- [x] Completed phases have verification evidence in status or linked decisions.
 
 ## Non-goals
 
@@ -282,7 +283,7 @@ PeakGuard will remain serverless, low-cost or zero-cost, daily batch-oriented, t
 The final report should make the reasoning chain visible without deciding for the user:
 
 ```text
-Action Review
+🔴 Action Review · 집중 검토
 
 NVDA — Deep Discount
 - Drawdown from 1Y rolling ATH: -31.4%
@@ -291,13 +292,9 @@ NVDA — Deep Discount
 - Current group weight: 14.8%
 - Target range: 14.0–18.0%
 
-Suggested review:
-- Check thesis before adding.
-- Do not exceed individual-stock allocation.
+→ 투자 논거 우선 점검
 
-Data Health
-- Fetch: all assets succeeded
-- Gist read/write: succeeded
+✅ 가격 7/7 · 히스토리 저장 완료
 ```
 
 The intended outcome is to detect when an asset is meaningfully discounted and help determine whether it deserves review within the user's portfolio rules.

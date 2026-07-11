@@ -423,6 +423,105 @@ class TestTickerSummary:
 class TestFormatDailySummary:
     """Tests for the format_daily_summary pure function."""
 
+    def test_groups_portfolio_guidance_into_three_review_sections(self) -> None:
+        """Portfolio actions map to action, watch-only, and no-action sections."""
+        summaries = [
+            TickerSummary(
+                ticker=ticker,
+                name=ticker,
+                current_price=80.0,
+                ath=100.0,
+                mdd_pct=20.0,
+                days_since_ath=30,
+                days_since_ath_limit=180,
+                bounce_pct=0.0,
+                mdd_alert=True,
+                ath_stale_alert=False,
+                bounce_alert=False,
+                ath_updated=False,
+                review_level=ReviewLevel.WATCH,
+                allocation_group=_allocation_group(),
+                portfolio_action=action,
+            )
+            for ticker, action in (
+                ("ACTION", PortfolioAction.ACTION_REVIEW),
+                ("WATCH", PortfolioAction.WATCH),
+                ("GUARDRAIL", PortfolioAction.NO_ADD),
+            )
+        ]
+
+        result = format_daily_summary(summaries, date(2026, 7, 11))
+
+        action_index = result.index("🔴 Action Review · 집중 검토 1종목")
+        watch_index = result.index("🟡 Watch Only · 관찰 1종목")
+        no_action_index = result.index("⚪ No Action · 행동 보류 1종목")
+        assert action_index < watch_index < no_action_index
+        assert action_index < result.index("ACTION · Watch") < watch_index
+        assert watch_index < result.index("WATCH · Watch") < no_action_index
+        assert no_action_index < result.index("GUARDRAIL · Watch")
+
+    def test_recovery_only_signal_is_compact_watch_only_item(self) -> None:
+        """A recovery-only signal stays compact under Watch Only."""
+        summary = TickerSummary(
+            ticker="AMZN",
+            name="Amazon",
+            current_price=245.34,
+            ath=274.99,
+            mdd_pct=10.78,
+            days_since_ath=20,
+            days_since_ath_limit=180,
+            bounce_pct=23.42,
+            mdd_alert=False,
+            ath_stale_alert=False,
+            bounce_alert=True,
+            ath_updated=False,
+            zscore=0.7655,
+            review_level=ReviewLevel.RECOVERY_WATCH,
+        )
+
+        result = format_daily_summary([summary], date(2026, 7, 11))
+
+        assert "🟡 Watch Only · 관찰 1종목" in result
+        assert "AMZN  $245.34 · +23.4% · Z +0.77" in result
+        assert "AMZN · Recovery Watch" not in result
+
+    @pytest.mark.parametrize("action", list(PortfolioAction))
+    def test_portfolio_action_report_language_is_non_prescriptive(
+        self, action: PortfolioAction
+    ) -> None:
+        """Every portfolio action renders without automatic trading instructions."""
+        summary = TickerSummary(
+            ticker="TEST",
+            name="Test",
+            current_price=80.0,
+            ath=100.0,
+            mdd_pct=20.0,
+            days_since_ath=30,
+            days_since_ath_limit=180,
+            bounce_pct=0.0,
+            mdd_alert=True,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+            review_level=ReviewLevel.WATCH,
+            allocation_group=_allocation_group(),
+            portfolio_action=action,
+        )
+
+        result = format_daily_summary([summary], date(2026, 7, 11)).lower()
+
+        for forbidden in (
+            "buy now",
+            "strong buy",
+            "sell",
+            "exit",
+            "must add",
+            "매수",
+            "매도",
+            "반드시 추가",
+        ):
+            assert forbidden not in result
+
     def test_prioritizes_action_items_and_groups_recovery_watch_compactly(self) -> None:
         """Actionable alerts lead while bounce-only recoveries share a compact list."""
         action = TickerSummary(
@@ -490,7 +589,9 @@ class TestFormatDailySummary:
 
         result = format_daily_summary([*recoveries, action], date(2026, 7, 10))
 
-        assert result.index("🔴 집중 검토 1종목") < result.index("🟡 회복 관찰 2종목")
+        assert result.index("🟡 Watch Only · 관찰 2종목") < result.index(
+            "⚪ No Action · 행동 보류 1종목"
+        )
         assert "MSFT · Watch" in result
         assert "$385.10 · MDD -28.7% · ATH 지연 255일" in result
         assert "↗ 저점 대비 +9.2% 반등" in result
@@ -945,7 +1046,7 @@ class TestFormatDailySummary:
         result = format_daily_summary(summaries, date(2026, 3, 7))
 
         if level is ReviewLevel.RECOVERY_WATCH:
-            assert "🟡 회복 관찰 1종목" in result
+            assert "🟡 Watch Only · 관찰 1종목" in result
             assert "검토 단계:" not in result
         else:
             level_line = f"AMZN · {level.value}"

@@ -261,6 +261,25 @@ def _format_recovery_line(summary: TickerSummary) -> str:
     return f"{summary.ticker}  {' · '.join(metrics)}"
 
 
+def _report_section(summary: TickerSummary) -> str:
+    """Classify one reportable ticker into the report's UX section.
+
+    Args:
+        summary: Reportable ticker with price and optional portfolio guidance.
+
+    Returns:
+        One of ``action``, ``watch``, or ``no_action``.
+    """
+    if summary.portfolio_action is PortfolioAction.NO_ADD:
+        return "no_action"
+    if summary.portfolio_action is PortfolioAction.WATCH or summary.review_level in {
+        ReviewLevel.NONE,
+        ReviewLevel.RECOVERY_WATCH,
+    }:
+        return "watch"
+    return "action"
+
+
 def format_daily_summary(
     summaries: list[TickerSummary],
     report_date: date,
@@ -292,25 +311,29 @@ def format_daily_summary(
     elif not alert_summaries:
         parts.append("✅ 모든 티커 이상 없음")
     else:
-        recovery_summaries = [
-            summary
-            for summary in alert_summaries
-            if summary.review_level is ReviewLevel.RECOVERY_WATCH
-        ]
-        action_summaries = [
-            summary for summary in alert_summaries if summary not in recovery_summaries
-        ]
-        if action_summaries:
-            parts.append(f"🔴 집중 검토 {len(action_summaries)}종목")
-            for summary in action_summaries:
-                parts.extend(("", _format_action_section(summary)))
-        if recovery_summaries:
-            if action_summaries:
+        section_specs = (
+            ("action", "🔴 Action Review · 집중 검토"),
+            ("watch", "🟡 Watch Only · 관찰"),
+            ("no_action", "⚪ No Action · 행동 보류"),
+        )
+        rendered_section = False
+        for section, label in section_specs:
+            section_summaries = [
+                summary
+                for summary in alert_summaries
+                if _report_section(summary) == section
+            ]
+            if not section_summaries:
+                continue
+            if rendered_section:
                 parts.append("")
-            parts.append(f"🟡 회복 관찰 {len(recovery_summaries)}종목")
-            parts.extend(
-                _format_recovery_line(summary) for summary in recovery_summaries
-            )
+            parts.append(f"{label} {len(section_summaries)}종목")
+            for summary in section_summaries:
+                if summary.review_level is ReviewLevel.RECOVERY_WATCH:
+                    parts.append(_format_recovery_line(summary))
+                else:
+                    parts.extend(("", _format_action_section(summary)))
+            rendered_section = True
         if any(
             summary.portfolio_context_stale
             and summary.allocation_group is not None

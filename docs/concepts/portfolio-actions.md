@@ -3,12 +3,13 @@ id: portfolio-actions
 title: Portfolio Actions
 type: concept
 status: active
-last_verified: 2026-07-07
+last_verified: 2026-07-11
 related:
   - review-levels.md
   - portfolio-context.md
   - ../decisions/0004-separate-price-levels-from-portfolio-actions.md
   - ../decisions/0005-scope-portfolio-context-to-reportable-assets.md
+  - ../decisions/0006-three-section-report-policy.md
   - ../roadmap.md
 code:
   - src/peakguard/portfolio_action.py
@@ -61,8 +62,9 @@ they declare a `portfolio_group`.
 
 ## Report presentation
 
-For an already-reportable ticker with a derived action, Telegram shows two compact
-lines: mapped group weight with target range and status, then a non-prescriptive
-action label. `NO_ADD` becomes “추가 배분 보류,” while thesis and ETF outcomes use
-thesis-review and rebalancing language. Stale mapped context adds one warning to the
-whole report rather than repeating it for every ticker.
+For an already-reportable ticker with a derived action, Telegram shows the mapped
+group weight, target range, and status on one line, followed by a non-prescriptive
+review prompt. `ACTION_REVIEW`, `REBALANCE_CANDIDATE`, and `THESIS_CHECK` appear in
+`Action Review`; `WATCH` appears in `Watch Only`; and `NO_ADD` appears in `No Action`
+as “추가 배분 보류.” Stale mapped context adds one report warning with the exact
+snapshot date and age rather than repeating it for every ticker.

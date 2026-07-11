@@ -1,17 +1,19 @@
 # PeakGuard
 
-A zero-cost, serverless **Maximum Drawdown (MDD)** tracking tool.
+A zero-cost, serverless **price-discount and portfolio-review monitor**.
 
 Project architecture, domain semantics, operations, and design decisions are documented in the [PeakGuard Wiki](docs/README.md).
 
-PeakGuard monitors a 1-year rolling All-Time High (ATH) for selected tech stocks and calculates
-the current drawdown. When user-defined thresholds are breached, it sends alerts via Telegram —
-all powered by GitHub Actions with no server required.
+PeakGuard monitors a 365-day rolling high, drawdown, statistical price weakness,
+recovery, and optional PortfoTrack allocation context for configured US stocks and
+US-market-exposure ETFs. Once per weekday it sends one prioritized Telegram report
+through GitHub Actions. It is a review trigger, not an automated trading signal.
 
 Optional PortfoTrack context enriches alerts only for configured individual stocks
 and ETFs that already have an active signal. PeakGuard does not list the complete
 PortfoTrack portfolio or turn quiet assets into report entries. Each eligible alert
-uses two compact allocation lines, with one shared warning when the snapshot is stale.
+uses compact allocation context, with one shared warning that identifies the exact
+snapshot date and age when the data is stale.
 
 ---
 
@@ -27,9 +29,11 @@ Each run executes the following pipeline (`src/peakguard/main.py`):
    - **Bootstrap** (first run): Fetch the full 1-year closing price history via `yfinance` and store it.
    - **Daily update**: Fetch today's closing price, append it to history, and trim entries older than 365 days.
 4. **Compute rolling ATH** — The ATH is the highest closing price within the 365-day window, not an all-time record.
-5. **Evaluate and send alerts** (see alert types below).
-6. **Batch fetch-error report** — If any tickers failed to fetch, send a summary alert.
-7. **Persist** — Write the updated history back to the GitHub Gist as `peak_prices.csv`.
+5. **Evaluate review state** — Combine price signals into a review level and, when
+   usable, derive a separate portfolio action.
+6. **Persist** — Write the updated history back to the GitHub Gist as `peak_prices.csv`.
+7. **Send one report** — Include prioritized ticker reviews, batched fetch failures,
+   and final data health in one Telegram message.
 
 ### Rolling Window ATH
 
@@ -50,6 +54,20 @@ An **ATH alert** is sent whenever the rolling ATH value changes (new high reache
 | **Fetch errors** | One or more tickers failed to fetch (batched into a single report) |
 
 All alerts are delivered via Telegram Bot API.
+
+### Report Priorities
+
+Every reportable ticker appears in exactly one section:
+
+| Section | Meaning |
+|---|---|
+| **Action Review · 집중 검토** | Review the thesis, allocation room, or next rebalance |
+| **Watch Only · 관찰** | Observe a within-range asset, recovery, or informational signal |
+| **No Action · 행동 보류** | Allocation upper guardrail is active; retain the alert without suggesting action |
+
+Recovery-only entries use one compact line. Fully healthy data status also uses one
+line; partial or failed runs show detailed health. Report wording is deliberately
+non-prescriptive and never issues an automatic trading instruction.
 
 ---
 
@@ -95,6 +113,8 @@ src/
     ├── mdd_calc.py    # Pure domain logic (drawdown, Z-score, bounce, rolling ATH)
     ├── storage.py     # CSV serialization/deserialization & local file I/O
     ├── config.py      # YAML config loader
+    ├── portfolio_context.py # Optional PortfoTrack snapshot validation
+    ├── portfolio_action.py  # Pure allocation-guidance classification
     ├── fetcher.py     # yfinance wrapper (price & history fetching)
     ├── notifier.py    # Telegram Bot API wrapper (all alert types)
     ├── gist_client.py # GitHub Gist API wrapper (remote CSV persistence)
@@ -103,7 +123,7 @@ src/
 
 **Layered Design:**
 
-- **Domain** (`mdd_calc`) — Pure business logic, no I/O or network calls
+- **Domain** (`mdd_calc`, `portfolio_action`) — Pure signal and allocation-guidance logic, no I/O or network calls
 - **Storage** (`storage`) — CSV serialization, local file I/O for development/testing
 - **External Services** (`fetcher`, `notifier`, `gist_client`) — All network calls, isolated with graceful error handling
 

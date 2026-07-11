@@ -3,9 +3,10 @@ id: current-status
 title: Current Status
 type: status
 status: active
-last_verified: 2026-07-07
+last_verified: 2026-07-11
 verified_by:
   - uv run pytest -q
+  - uv run python .agents/skills/peakguard-wiki/scripts/validate_wiki.py
   - uv run pre-commit run --all-files
 related:
   - architecture.md
@@ -30,8 +31,9 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
 - PortfoTrack context does not expand the report universe: quiet configured tickers
   and unrelated portfolio groups remain omitted.
-- Tests: **347 passed** on 2026-07-07.
-- Pre-commit: all configured hooks passed on 2026-07-07.
+- Tests: **356 passed** on 2026-07-11.
+- Wiki validation: **39 documents passed** on 2026-07-11.
+- Pre-commit: all configured hooks passed on 2026-07-11.
 
 ## Implemented capabilities
 
@@ -47,7 +49,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Final price-fetch, Gist read/write, signal-evaluation, and remote-history health in every reachable daily report path.
 - Health-only Telegram reporting before fatal Gist read or write errors are propagated to fail the workflow.
 - Inclusive configured Z-score alerts in daily orchestration, with safe unavailable handling for insufficient or zero-variance history.
-- Deterministic discount review levels derived from MDD, Z-score, and bounce, shown before supporting metrics.
+- Deterministic discount review levels derived from MDD, Z-score, and bounce, used
+  with portfolio actions to prioritize report sections.
 - Explicit `THESIS_CHECK` precedence reserved for a future non-price asset policy input.
 - Backward-compatible optional asset metadata with validated asset types, portfolio
   groups, thesis policy, and one-way canonical US-exposure proxy mappings. The two
@@ -64,12 +67,16 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
   current or stale PortfoTrack groups are now resolved during daily orchestration
   and the resulting allocation facts and action reach `TickerSummary`. Missing,
   unknown, and expired mappings preserve price-only behavior.
-- Reportable configured stocks and ETFs show mapped weight, target range, allocation
-  status, and non-prescriptive portfolio action in two compact lines. Stale context
-  produces one report-level warning. Quiet tickers and unrelated context groups stay
-  omitted, and a worst-case seven-ticker formatting test protects Telegram's
-  4,096-character limit. Legacy untyped entries remain price-only even if they carry
-  a group mapping.
+- Reportable configured stocks and ETFs are grouped into `Action Review`, `Watch
+  Only`, and optional `No Action` sections. Recovery-only signals use one compact
+  line; focused entries keep price, allocation, and suggested review visually
+  separate. Healthy data status uses one line, while partial or failed runs show
+  details. Stale context reports its exact snapshot date and age. Quiet tickers and
+  unrelated context groups stay omitted, and a worst-case seven-ticker formatting
+  test protects Telegram's 4,096-character limit.
+- Formatting tests protect non-prescriptive language for every portfolio action and
+  preserve the three-section order. The accepted presentation contract is recorded
+  in ADR-0006.
 
 ## Update rule
 

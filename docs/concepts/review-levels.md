@@ -3,12 +3,13 @@ id: discount-review-levels
 title: Discount Review Levels
 type: concept
 status: active
-last_verified: 2026-07-07
+last_verified: 2026-07-11
 related:
   - alerts/price-signals.md
   - portfolio-actions.md
   - ../decisions/0003-discount-review-level-precedence.md
   - ../decisions/0004-separate-price-levels-from-portfolio-actions.md
+  - ../decisions/0006-three-section-report-policy.md
   - ../roadmap.md
 code:
   - src/peakguard/mdd_calc.py
@@ -50,9 +51,12 @@ When Z-score is unavailable because history is insufficient or has zero variance
 
 ## Reporting
 
-Every reportable ticker shows `검토 단계` before price and metric details. Existing alert labels remain as supporting evidence, while the review level provides the primary interpretation.
+The formatter uses the review level and optional portfolio action to place each
+ticker in `Action Review`, `Watch Only`, or `No Action`. Focused entries show the
+review level beside the ticker; recovery-only entries are compressed into one line
+under `Watch Only`. Repeated `검토 단계`, `검토 관점`, and status labels are omitted.
 
-When asset metadata is present, `검토 관점` adds a non-prescriptive prompt:
+When asset metadata is present, a final arrow line adds a non-prescriptive prompt:
 
 - individual stocks with thesis policy prompt an investment-thesis review;
 - other individual stocks prompt a fundamentals review;

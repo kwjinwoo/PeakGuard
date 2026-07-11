@@ -50,6 +50,7 @@ This is the complete catalog of durable PeakGuard Wiki documents. `README.md` ex
 - [ADR-0003: Discount review level precedence](decisions/0003-discount-review-level-precedence.md)
 - [ADR-0004: Separate price levels from portfolio actions](decisions/0004-separate-price-levels-from-portfolio-actions.md)
 - [ADR-0005: Scope portfolio context to reportable assets](decisions/0005-scope-portfolio-context-to-reportable-assets.md)
+- [ADR-0006: Organize reports into three review sections](decisions/0006-three-section-report-policy.md)
 
 ## Operations and learned context
 
