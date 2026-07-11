@@ -179,6 +179,9 @@ class TestRun:
         assert summary.portfolio_action is expected_action
         assert (summary.allocation_group is not None) is (expected_action is not None)
         assert summary.portfolio_context_stale is expected_stale
+        assert summary.portfolio_context_as_of == (
+            context.as_of if expected_stale else None
+        )
 
     def test_invalid_portfolio_context_fails_before_external_calls(
         self, mocker

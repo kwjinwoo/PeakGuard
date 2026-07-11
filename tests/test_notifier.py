@@ -423,6 +423,110 @@ class TestTickerSummary:
 class TestFormatDailySummary:
     """Tests for the format_daily_summary pure function."""
 
+    def test_prioritizes_action_items_and_groups_recovery_watch_compactly(self) -> None:
+        """Actionable alerts lead while bounce-only recoveries share a compact list."""
+        action = TickerSummary(
+            ticker="MSFT",
+            name="Microsoft",
+            current_price=385.10,
+            ath=539.83,
+            mdd_pct=28.66,
+            days_since_ath=255,
+            days_since_ath_limit=180,
+            bounce_pct=9.15,
+            mdd_alert=True,
+            ath_stale_alert=True,
+            bounce_alert=True,
+            ath_updated=False,
+            zscore=-1.3255,
+            review_level=ReviewLevel.WATCH,
+            asset_type=AssetType.INDIVIDUAL_STOCK,
+            thesis_required=True,
+            allocation_group=_allocation_group(status=AllocationStatus.ABOVE_TOLERANCE),
+            portfolio_action=PortfolioAction.NO_ADD,
+        )
+        recoveries = [
+            TickerSummary(
+                ticker=ticker,
+                name=name,
+                current_price=price,
+                ath=ath,
+                mdd_pct=5.0,
+                days_since_ath=20,
+                days_since_ath_limit=180,
+                bounce_pct=bounce,
+                mdd_alert=False,
+                ath_stale_alert=False,
+                bounce_alert=True,
+                ath_updated=False,
+                currency=currency,
+                zscore=zscore,
+                review_level=ReviewLevel.RECOVERY_WATCH,
+                asset_type=asset_type,
+            )
+            for ticker, name, price, ath, bounce, zscore, currency, asset_type in (
+                (
+                    "AMZN",
+                    "Amazon",
+                    245.34,
+                    274.99,
+                    23.42,
+                    0.7655,
+                    "USD",
+                    AssetType.INDIVIDUAL_STOCK,
+                ),
+                (
+                    "360750.KS",
+                    "TIGER 미국S&P500",
+                    28085,
+                    28875,
+                    32.90,
+                    1.6713,
+                    "KRW",
+                    AssetType.CORE_ETF,
+                ),
+            )
+        ]
+
+        result = format_daily_summary([*recoveries, action], date(2026, 7, 10))
+
+        assert result.index("🔴 집중 검토 1종목") < result.index("🟡 회복 관찰 2종목")
+        assert "MSFT · Watch" in result
+        assert "$385.10 · MDD -28.7% · ATH 지연 255일" in result
+        assert "↗ 저점 대비 +9.2% 반등" in result
+        assert "AMZN  $245.34 · +23.4% · Z +0.77" in result
+        assert "360750.KS  ₩28,085 · +32.9% · Z +1.67" in result
+        assert "검토 단계:" not in result
+        assert "검토 관점:" not in result
+        assert "현재가 / 최고가" not in result
+
+    def test_stale_portfolio_warning_shows_exact_snapshot_age(self) -> None:
+        """Stale allocation guidance identifies its snapshot date and exact age."""
+        summary = TickerSummary(
+            ticker="MSFT",
+            name="Microsoft",
+            current_price=80.0,
+            ath=100.0,
+            mdd_pct=20.0,
+            days_since_ath=30,
+            days_since_ath_limit=180,
+            bounce_pct=0.0,
+            mdd_alert=True,
+            ath_stale_alert=False,
+            bounce_alert=False,
+            ath_updated=False,
+            review_level=ReviewLevel.WATCH,
+            allocation_group=_allocation_group(),
+            portfolio_action=PortfolioAction.WATCH,
+            portfolio_context_stale=True,
+            portfolio_context_as_of=date(2026, 6, 30),
+        )
+
+        result = format_daily_summary([summary], date(2026, 7, 10))
+
+        assert "⚠️ 배분 데이터 10일 전 기준 (2026-06-30)" in result
+        assert "8–30일" not in result
+
     def test_reportable_ticker_shows_compact_portfolio_context(self) -> None:
         """Mapped allocation facts enrich an existing ticker alert compactly."""
         summary = TickerSummary(
@@ -446,8 +550,8 @@ class TestFormatDailySummary:
 
         result = format_daily_summary([summary], date(2026, 7, 7))
 
-        assert "배분: us_equity 18.0% · 목표 14.0%–17.0% · 목표 상단 초과" in result
-        assert "배분 검토: 추가 배분 보류" in result
+        assert "배분 18.0% / 목표 14%–17% · 목표 상단 초과" in result
+        assert "→ 추가 배분 보류" in result
 
     @pytest.mark.parametrize(
         ("action", "label"),
@@ -484,7 +588,7 @@ class TestFormatDailySummary:
 
         result = format_daily_summary([summary], date(2026, 7, 7))
 
-        assert f"배분 검토: {label}" in result
+        assert f"→ {label}" in result
 
     def test_configured_universe_worst_case_fits_one_telegram_message(self) -> None:
         """Seven fully alerted configured assets remain under Telegram's limit."""
@@ -579,7 +683,7 @@ class TestFormatDailySummary:
 
         result = format_daily_summary(summaries, date(2026, 7, 7))
 
-        assert result.count("PortfoTrack 배분 정보가 오래되었습니다") == 1
+        assert result.count("⚠️ 배분 데이터가 오래되었습니다") == 1
 
     def test_header_contains_date(self) -> None:
         """The summary header includes the report date."""
@@ -629,12 +733,8 @@ class TestFormatDailySummary:
 
         result = format_daily_summary([], date(2026, 3, 7), data_health=health)
 
-        assert "Data Health" in result
-        assert "Price fetch: succeeded (2 succeeded, 0 failed)" in result
-        assert "Gist read: succeeded" in result
-        assert "Gist write: succeeded" in result
-        assert "Signals: evaluated" in result
-        assert "Remote history: updated" in result
+        assert "✅ 가격 2/2 · 히스토리 저장 완료" in result
+        assert "데이터 상태" not in result
 
     def test_partial_fetch_is_not_presented_as_healthy(self) -> None:
         health = RunHealth(
@@ -648,8 +748,9 @@ class TestFormatDailySummary:
 
         result = format_daily_summary([], date(2026, 3, 7), data_health=health)
 
-        assert "Price fetch: partial (1 succeeded, 1 failed)" in result
-        assert "Price fetch: succeeded" not in result
+        assert "⚠️ 데이터 상태" in result
+        assert "가격: partial (1 성공, 1 실패)" in result
+        assert "✅ 가격" not in result
 
     def test_fatal_persistence_health_suppresses_all_clear(self) -> None:
         health = RunHealth(
@@ -665,10 +766,10 @@ class TestFormatDailySummary:
 
         assert "가격 신호를 평가하지 않음" in result
         assert "이상 없음" not in result
-        assert "Gist read: failed" in result
-        assert "Gist write: not attempted" in result
-        assert "Signals: not evaluated" in result
-        assert "Remote history: not modified" in result
+        assert "Gist 읽기: failed" in result
+        assert "Gist 쓰기: not attempted" in result
+        assert "신호 평가: 미평가" in result
+        assert "원격 히스토리: 미변경" in result
 
     def test_mdd_alert_ticker_shows_mdd_section(self) -> None:
         """Ticker with MDD alert shows drawdown info."""
@@ -690,11 +791,9 @@ class TestFormatDailySummary:
         ]
         result = format_daily_summary(summaries, date(2026, 3, 7))
         assert "AMZN" in result
-        assert "Amazon" in result
         assert "MDD" in result or "📉" in result
         assert "$213.21" in result
-        assert "$254.00" in result
-        assert "-16.06%" in result
+        assert "-16.1%" in result
 
     def test_bounce_alert_shows_bounce_info(self) -> None:
         """Ticker with bounce alert shows bounce percentage."""
@@ -716,7 +815,7 @@ class TestFormatDailySummary:
         ]
         result = format_daily_summary(summaries, date(2026, 3, 7))
         assert "NVDA" in result
-        assert "+88.58%" in result
+        assert "+88.6%" in result
         assert "반등" in result or "📈" in result
 
     def test_ath_stale_alert_shows_days_info(self) -> None:
@@ -740,7 +839,6 @@ class TestFormatDailySummary:
         result = format_daily_summary(summaries, date(2026, 3, 7))
         assert "META" in result
         assert "206" in result
-        assert "180" in result
 
     def test_ath_updated_shows_new_ath(self) -> None:
         """Ticker with ATH update shows the new high marker."""
@@ -783,10 +881,9 @@ class TestFormatDailySummary:
             ),
         ]
         result = format_daily_summary(summaries, date(2026, 3, 7))
-        assert "📉" in result
-        assert "📈" in result
-        assert "-16.06%" in result
-        assert "+27.43%" in result
+        assert "MDD -16.1%" in result
+        assert "↗" in result
+        assert "+27.4%" in result
 
     def test_zscore_alert_shows_status_and_value(self) -> None:
         """A breached Z-score threshold is visible in the ticker section."""
@@ -811,8 +908,7 @@ class TestFormatDailySummary:
 
         result = format_daily_summary(summaries, date(2026, 3, 7))
 
-        assert "Z-score 경고" in result
-        assert "Z-score: -2.5300" in result
+        assert "Z -2.53" in result
 
     @pytest.mark.parametrize(
         "level",
@@ -824,8 +920,8 @@ class TestFormatDailySummary:
             ReviewLevel.RECOVERY_WATCH,
         ],
     )
-    def test_review_level_precedes_raw_metrics(self, level: ReviewLevel) -> None:
-        """The review state leads each reportable ticker section."""
+    def test_review_level_drives_section_priority(self, level: ReviewLevel) -> None:
+        """The review state selects a focused or compact recovery section."""
         summaries = [
             TickerSummary(
                 ticker="AMZN",
@@ -848,9 +944,13 @@ class TestFormatDailySummary:
 
         result = format_daily_summary(summaries, date(2026, 3, 7))
 
-        level_line = f"검토 단계: {level.value}"
-        assert level_line in result
-        assert result.index(level_line) < result.index("현재가 / 최고가")
+        if level is ReviewLevel.RECOVERY_WATCH:
+            assert "🟡 회복 관찰 1종목" in result
+            assert "검토 단계:" not in result
+        else:
+            level_line = f"AMZN · {level.value}"
+            assert level_line in result
+            assert result.index(level_line) < result.index("$80.00")
         assert "buy" not in result.lower()
 
     @pytest.mark.parametrize(
@@ -886,12 +986,13 @@ class TestFormatDailySummary:
 
         result = format_daily_summary([summary], date(2026, 3, 7))
 
-        assert f"검토 관점: {expected}" in result
+        assert f"→ {expected}" in result
+        assert "검토 관점:" not in result
         for forbidden in ("buy now", "strong buy", "매수", "매도", "반드시 추가"):
             assert forbidden not in result.lower()
 
-    def test_non_alert_zscore_is_context_for_another_alert(self) -> None:
-        """Reportable tickers show Z-score even when it did not breach."""
+    def test_non_alert_zscore_is_omitted_from_focused_alert(self) -> None:
+        """Z-score stays secondary unless it breached or belongs to recovery."""
         summaries = [
             TickerSummary(
                 ticker="AMZN",
@@ -913,8 +1014,7 @@ class TestFormatDailySummary:
 
         result = format_daily_summary(summaries, date(2026, 3, 7))
 
-        assert "Z-score 경고" not in result
-        assert "Z-score: -1.2500" in result
+        assert " · Z " not in result
 
     def test_triple_alert_mdd_stale_bounce(self) -> None:
         """Ticker with MDD, stale ATH, and bounce shows all three."""
@@ -935,12 +1035,12 @@ class TestFormatDailySummary:
             ),
         ]
         result = format_daily_summary(summaries, date(2026, 3, 7))
-        assert "📉" in result
-        assert "⏸" in result
-        assert "📈" in result
-        assert "-18.25%" in result
+        assert "MDD" in result
+        assert "ATH 지연" in result
+        assert "↗" in result
+        assert "-18.2%" in result
         assert "206" in result
-        assert "+33.36%" in result
+        assert "+33.4%" in result
 
     def test_multiple_tickers_each_has_section(self) -> None:
         """Multiple alert tickers each get their own section."""
@@ -1056,7 +1156,7 @@ class TestFormatDailySummary:
         ]
         result = format_daily_summary(summaries, date(2026, 3, 7))
         assert "\u20a915,280" in result
-        assert "\u20a918,000" in result
+        assert "\u20a918,000" not in result
 
     def test_usd_ticker_shows_dollar_symbol(self) -> None:
         """USD ticker prices display with $ symbol and 2 decimal places."""
@@ -1079,7 +1179,7 @@ class TestFormatDailySummary:
         ]
         result = format_daily_summary(summaries, date(2026, 3, 7))
         assert "$213.21" in result
-        assert "$254.00" in result
+        assert "$254.00" not in result
 
 
 # ---------------------------------------------------------------------------

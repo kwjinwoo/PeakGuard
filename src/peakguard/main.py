@@ -363,6 +363,9 @@ def run() -> None:
                 allocation_group=allocation_group,
                 portfolio_action=portfolio_action,
                 portfolio_context_stale=portfolio_context_stale,
+                portfolio_context_as_of=(
+                    portfolio_context.as_of if portfolio_context_stale else None
+                ),
             )
         else:
             drawdown = calculate_drawdown(current_price, new_ath)
@@ -418,6 +421,9 @@ def run() -> None:
                 allocation_group=allocation_group,
                 portfolio_action=portfolio_action,
                 portfolio_context_stale=portfolio_context_stale,
+                portfolio_context_as_of=(
+                    portfolio_context.as_of if portfolio_context_stale else None
+                ),
             )
 
         summaries.append(summary)

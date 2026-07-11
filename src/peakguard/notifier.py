@@ -122,6 +122,7 @@ class TickerSummary:
         allocation_group: Resolved PortfoTrack allocation facts, when usable.
         portfolio_action: Allocation guidance derived separately from price state.
         portfolio_context_stale: Whether mapped allocation facts are 8–30 days old.
+        portfolio_context_as_of: Snapshot date for stale allocation facts.
 
     Raises:
         ValueError: If ticker is empty.
@@ -148,6 +149,7 @@ class TickerSummary:
     allocation_group: AllocationGroup | None = None
     portfolio_action: PortfolioAction | None = None
     portfolio_context_stale: bool = False
+    portfolio_context_as_of: date | None = None
 
     def __post_init__(self) -> None:
         if not self.ticker or not self.ticker.strip():
@@ -203,29 +205,8 @@ def _asset_review_prompt(summary: TickerSummary) -> str | None:
     return None
 
 
-def _format_portfolio_context(summary: TickerSummary) -> list[str]:
-    """Format compact allocation facts for one already-reportable ticker.
-
-    Args:
-        summary: Reportable ticker with optional mapped allocation guidance.
-
-    Returns:
-        Two compact lines, or an empty list when no action can be interpreted.
-    """
-    group = summary.allocation_group
-    action = summary.portfolio_action
-    if group is None or action is None:
-        return []
-    return [
-        f"배분: {group.asset_id} {group.current_weight:.1%} · "
-        f"목표 {group.target_lower:.1%}–{group.target_upper:.1%} · "
-        f"{_ALLOCATION_STATUS_LABELS[group.status]}",
-        f"배분 검토: {_PORTFOLIO_ACTION_LABELS[action]}",
-    ]
-
-
-def _format_ticker_section(summary: TickerSummary) -> str:
-    """Build the message section for a single ticker with active alerts.
+def _format_action_section(summary: TickerSummary) -> str:
+    """Build a compact section for a ticker requiring focused review.
 
     Args:
         summary: The ticker's aggregated daily metrics.
@@ -233,56 +214,51 @@ def _format_ticker_section(summary: TickerSummary) -> str:
     Returns:
         A formatted string block for this ticker.
     """
-    # Status line
-    status_parts: list[str] = []
-    if summary.mdd_alert:
-        status_parts.append("📉 MDD 경고")
-    if summary.ath_stale_alert:
-        status_parts.append("⏸ ATH 지연")
-    if summary.bounce_alert:
-        status_parts.append("📈 반등 신호")
-    if summary.ath_updated:
-        status_parts.append("🏔 ATH 갱신")
-    if summary.zscore_alert:
-        status_parts.append("📐 Z-score 경고")
-
-    lines: list[str] = []
-    lines.append(f"{summary.ticker} ({summary.name})")
-    lines.append(f"검토 단계: {summary.review_level.value}")
-    review_prompt = _asset_review_prompt(summary)
-    if review_prompt is not None:
-        lines.append(f"검토 관점: {review_prompt}")
-    lines.extend(_format_portfolio_context(summary))
-    lines.append(f"상태: {' '.join(status_parts)}")
-
-    # Price / ATH line
-    current = _format_price(summary.current_price, summary.currency)
-    ath = _format_price(summary.ath, summary.currency)
-    lines.append(f"현재가 / 최고가(ATH): {current} / {ath}")
-
-    # MDD line
+    heading = summary.ticker
+    if summary.review_level is not ReviewLevel.NONE:
+        heading = f"{heading} · {summary.review_level.value}"
+    lines = [heading]
+    metrics = [_format_price(summary.current_price, summary.currency)]
     if summary.mdd_pct is not None and summary.mdd_alert:
-        lines.append(f"고점 대비 하락률(MDD): -{summary.mdd_pct:.2f}%")
+        metrics.append(f"MDD -{summary.mdd_pct:.1f}%")
+    if summary.ath_stale_alert and summary.days_since_ath is not None:
+        metrics.append(f"ATH 지연 {summary.days_since_ath}일")
+    if summary.zscore_alert and summary.zscore is not None:
+        metrics.append(f"Z {summary.zscore:+.2f}")
+    if summary.ath_updated:
+        metrics.append("ATH 갱신")
+    lines.append(" · ".join(metrics))
 
-    if summary.zscore is not None:
-        lines.append(f"Z-score: {summary.zscore:.4f}")
+    if summary.bounce_pct is not None and summary.bounce_alert:
+        lines.append(f"↗ 저점 대비 +{summary.bounce_pct:.1f}% 반등")
 
-    # ATH stale line
-    if (
-        summary.ath_stale_alert
-        and summary.days_since_ath is not None
-        and summary.days_since_ath_limit is not None
-    ):
+    group = summary.allocation_group
+    if group is not None:
         lines.append(
-            f"ATH 갱신 지연: {summary.days_since_ath}일 "
-            f"(제한 기준 {summary.days_since_ath_limit}일 초과 - 현금 투입 조절 고려)"
+            f"배분 {group.current_weight:.1%} / 목표 "
+            f"{group.target_lower:.0%}–{group.target_upper:.0%} · "
+            f"{_ALLOCATION_STATUS_LABELS[group.status]}"
         )
 
-    # Bounce line
-    if summary.bounce_pct is not None and summary.bounce_alert:
-        lines.append(f"저점 대비 반등률: +{summary.bounce_pct:.2f}% (추세 반전 감지)")
+    if summary.portfolio_action is not None:
+        prompt = _PORTFOLIO_ACTION_LABELS[summary.portfolio_action]
+        lines.append(f"→ {prompt}")
+    else:
+        prompt = _asset_review_prompt(summary)
+        if prompt is not None:
+            lines.append(f"→ {prompt}")
 
     return "\n".join(lines)
+
+
+def _format_recovery_line(summary: TickerSummary) -> str:
+    """Format one bounce-only recovery item on a single line."""
+    metrics = [_format_price(summary.current_price, summary.currency)]
+    if summary.bounce_pct is not None:
+        metrics.append(f"+{summary.bounce_pct:.1f}%")
+    if summary.zscore is not None:
+        metrics.append(f"Z {summary.zscore:+.2f}")
+    return f"{summary.ticker}  {' · '.join(metrics)}"
 
 
 def format_daily_summary(
@@ -306,7 +282,7 @@ def format_daily_summary(
     Returns:
         A formatted summary string ready to send via Telegram.
     """
-    header = f"📊 PeakGuard Daily Report — {report_date}"
+    header = f"📊 PeakGuard · {report_date}"
     parts: list[str] = [header, ""]
 
     alert_summaries = [s for s in summaries if s.has_alert]
@@ -316,10 +292,25 @@ def format_daily_summary(
     elif not alert_summaries:
         parts.append("✅ 모든 티커 이상 없음")
     else:
-        for i, summary in enumerate(alert_summaries):
-            if i > 0:
+        recovery_summaries = [
+            summary
+            for summary in alert_summaries
+            if summary.review_level is ReviewLevel.RECOVERY_WATCH
+        ]
+        action_summaries = [
+            summary for summary in alert_summaries if summary not in recovery_summaries
+        ]
+        if action_summaries:
+            parts.append(f"🔴 집중 검토 {len(action_summaries)}종목")
+            for summary in action_summaries:
+                parts.extend(("", _format_action_section(summary)))
+        if recovery_summaries:
+            if action_summaries:
                 parts.append("")
-            parts.append(_format_ticker_section(summary))
+            parts.append(f"🟡 회복 관찰 {len(recovery_summaries)}종목")
+            parts.extend(
+                _format_recovery_line(summary) for summary in recovery_summaries
+            )
         if any(
             summary.portfolio_context_stale
             and summary.allocation_group is not None
@@ -327,7 +318,18 @@ def format_daily_summary(
             for summary in alert_summaries
         ):
             parts.append("")
-            parts.append("⚠️ PortfoTrack 배분 정보가 오래되었습니다 (8–30일 경과).")
+            stale_dates = [
+                summary.portfolio_context_as_of
+                for summary in alert_summaries
+                if summary.portfolio_context_stale
+                and summary.portfolio_context_as_of is not None
+            ]
+            if stale_dates:
+                oldest = min(stale_dates)
+                age_days = (report_date - oldest).days
+                parts.append(f"⚠️ 배분 데이터 {age_days}일 전 기준 ({oldest})")
+            else:
+                parts.append("⚠️ 배분 데이터가 오래되었습니다")
 
     if fetch_errors:
         parts.append("")
@@ -431,17 +433,28 @@ def _format_data_health(health: RunHealth) -> str:
     Returns:
         A human-readable data-health block.
     """
-    signal_status = "evaluated" if health.signals_evaluated else "not evaluated"
-    history_status = "updated" if health.history_modified else "not modified"
+    fully_healthy = (
+        health.fetch_status is HealthStatus.SUCCEEDED
+        and health.gist_read is HealthStatus.SUCCEEDED
+        and health.gist_write is HealthStatus.SUCCEEDED
+        and health.signals_evaluated
+        and health.history_modified
+    )
+    if fully_healthy:
+        total = health.fetch_succeeded + health.fetch_failed
+        return f"✅ 가격 {health.fetch_succeeded}/{total} · 히스토리 저장 완료"
+
+    signal_status = "완료" if health.signals_evaluated else "미평가"
+    history_status = "업데이트" if health.history_modified else "미변경"
     return "\n".join(
         [
-            "Data Health",
-            f"- Price fetch: {health.fetch_status.value} "
-            f"({health.fetch_succeeded} succeeded, {health.fetch_failed} failed)",
-            f"- Gist read: {health.gist_read.value}",
-            f"- Gist write: {health.gist_write.value}",
-            f"- Signals: {signal_status}",
-            f"- Remote history: {history_status}",
+            "⚠️ 데이터 상태",
+            f"- 가격: {health.fetch_status.value} "
+            f"({health.fetch_succeeded} 성공, {health.fetch_failed} 실패)",
+            f"- Gist 읽기: {health.gist_read.value}",
+            f"- Gist 쓰기: {health.gist_write.value}",
+            f"- 신호 평가: {signal_status}",
+            f"- 원격 히스토리: {history_status}",
         ]
     )
 
