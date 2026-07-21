@@ -3,7 +3,7 @@ id: current-status
 title: Current Status
 type: status
 status: active
-last_verified: 2026-07-11
+last_verified: 2026-07-21
 verified_by:
   - uv run pytest -q
   - uv run python .agents/skills/peakguard-wiki/scripts/validate_wiki.py
@@ -31,12 +31,16 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
 - PortfoTrack context does not expand the report universe: quiet configured tickers
   and unrelated portfolio groups remain omitted.
-- Tests: **356 passed** on 2026-07-11.
-- Wiki validation: **39 documents passed** on 2026-07-11.
-- Pre-commit: all configured hooks passed on 2026-07-11.
+- Tests: **365 passed** on 2026-07-21.
+- Wiki validation: **39 documents passed** on 2026-07-21.
+- Pre-commit: all configured hooks passed on 2026-07-21.
 
 ## Implemented capabilities
 
+- Local `peakguard assets list/add/update/remove` commands for tracked-asset management.
+  Mutations reject duplicate or unknown tickers, require removal confirmation,
+  validate the complete generated configuration, and replace it atomically without
+  making network calls.
 - One-year price-history bootstrap for newly configured tickers.
 - Daily close fetch and date-based history upsert.
 - Inclusive 365-day rolling ATH.

@@ -3,7 +3,7 @@ id: system-architecture
 title: System Overview
 type: architecture
 status: active
-last_verified: 2026-07-07
+last_verified: 2026-07-11
 related:
   - concepts/domain-model.md
   - operations.md
@@ -13,10 +13,12 @@ code:
   - src/peakguard/main.py
   - src/peakguard/portfolio_action.py
   - src/peakguard/portfolio_context.py
+  - src/peakguard/cli.py
 tests:
   - tests/test_main.py
   - tests/test_portfolio_action.py
   - tests/test_portfolio_context.py
+  - tests/test_cli.py
 ---
 
 # System Overview
@@ -45,6 +47,7 @@ Fatal Gist reads skip price evaluation and writes but still attempt a health-onl
 | Domain | `peakguard.mdd_calc` | Pure calculations and rolling-history rules |
 | Portfolio policy | `peakguard.portfolio_action` | Pure allocation-action classification separate from price levels |
 | Configuration | `peakguard.config` | YAML parsing and validation |
+| Configuration CLI | `peakguard.cli` | Local tracked-asset listing and atomic validated add/update/remove operations |
 | Portfolio context | `peakguard.portfolio_context` | Optional PortfoTrack schema 1.0 JSON validation and immutable context objects |
 | Storage format | `peakguard.storage` | `ClosingPrice`, CSV conversion, local file I/O |
 | Market data | `peakguard.fetcher` | yfinance integration |
@@ -53,6 +56,10 @@ Fatal Gist reads skip price evaluation and writes but still attempt a health-onl
 | Error taxonomy | `peakguard.errors` | Expected I/O and provider failure types |
 
 Domain code must remain deterministic and unaware of files, environment variables, HTTP, yfinance, Telegram, or Gists. Integration modules translate provider failures into typed application errors. The orchestrator decides whether a failure is recoverable for the current run.
+
+The local CLI is separate from the daily pipeline. It performs no provider calls,
+uses `peakguard.config` as the validation authority, and atomically replaces the
+configuration only after the complete temporary document passes validation.
 
 The PortfoTrack context boundary is a local, read-only loader connected before remote
 I/O. Orchestration classifies freshness, resolves only configured group mappings,

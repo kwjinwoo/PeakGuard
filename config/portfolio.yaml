@@ -1,56 +1,49 @@
-# PeakGuard Portfolio Configuration
-# Each entry maps a ticker symbol to its MDD alert threshold (%).
-
 tickers:
-  # Individual tech stocks
-  AMZN:
-    name: "Amazon"
-    threshold: 15.0
-    asset_type: individual_stock
-    portfolio_group: us_equity
-    thesis_required: true
   MSFT:
-    name: "Microsoft"
+    name: Microsoft
     threshold: 15.0
     asset_type: individual_stock
     portfolio_group: us_equity
     thesis_required: true
   META:
-    name: "Meta"
+    name: Meta
     threshold: 15.0
     asset_type: individual_stock
     portfolio_group: us_equity
     thesis_required: true
   NVDA:
-    name: "Nvidia"
+    name: Nvidia
     threshold: 15.0
     asset_type: individual_stock
     portfolio_group: us_equity
     thesis_required: true
   GOOGL:
-    name: "Google"
+    name: Google
     threshold: 15.0
     asset_type: individual_stock
     portfolio_group: us_equity
     thesis_required: true
-
-  # Korean ETFs (KRX)
-  "360750.KS":
-    name: "TIGER 미국S&P500"
+  360750.KS:
+    name: TIGER 미국S&P500
     threshold: 15.0
     currency: KRW
     asset_type: core_etf
     portfolio_group: us_equity
     proxy_for: SPY
-  "133690.KS":
-    name: "TIGER 미국나스닥100"
+  133690.KS:
+    name: TIGER 미국나스닥100
     threshold: 15.0
     currency: KRW
     asset_type: core_etf
     portfolio_group: us_equity
     proxy_for: QQQ
-
-# Global alert thresholds for conditional metric alerts
+  SPCX:
+    name: SpaceX
+    threshold: 15.0
+    currency: USD
+    asset_type: individual_stock
+    portfolio_group: us_equity
+    thesis_required: true
 alert_thresholds:
   days_since_ath_limit: 180
   zscore_threshold: -2.0

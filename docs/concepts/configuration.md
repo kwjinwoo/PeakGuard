@@ -3,15 +3,18 @@ id: configuration
 title: Configuration
 type: concept
 status: active
-last_verified: 2026-07-06
+last_verified: 2026-07-11
 related:
   - data-contracts.md
   - ../operations.md
 code:
   - config/portfolio.yaml
   - src/peakguard/config.py
+  - src/peakguard/cli.py
+  - pyproject.toml
 tests:
   - tests/test_config.py
+  - tests/test_cli.py
 ---
 
 # Configuration
@@ -55,5 +58,33 @@ alert_thresholds:
 - `bounce_from_bottom_min` must be non-negative.
 
 Configuration contains no credentials. Runtime secrets remain environment variables described in [Operations](../operations.md).
+
+## Tracked-asset CLI
+
+The `peakguard` project script manages the `tickers` mapping without performing
+market or network requests:
+
+```bash
+uv run peakguard assets list
+uv run peakguard assets add AAPL --name "Apple"
+uv run peakguard assets update AAPL --thesis-required
+uv run peakguard assets remove AAPL
+```
+
+`add` defaults to the current US individual-stock policy and accepts explicit
+threshold, currency, asset type, portfolio group, thesis policy, and proxy options.
+`update` changes only supplied fields and supports paired `--thesis-required` and
+`--no-thesis-required` flags. Add rejects duplicates; update and remove reject
+unknown tickers. `remove` requires interactive confirmation unless `--yes` is
+supplied.
+
+Mutations serialize the complete YAML document to a temporary file, validate both
+the ticker and alert-threshold sections through the canonical loaders, flush it, and
+atomically replace `config/portfolio.yaml`. Existing key order is retained; comments
+and cosmetic YAML formatting are not part of the persisted contract. Removing a
+ticker does not delete its historical rows from the remote Gist.
+
+The root [README](../../README.md#tracked-asset-cli) is the user-facing command and
+option reference.
 
 When changing this schema, update `src/peakguard/config.py`, `tests/test_config.py`, configuration examples, and every orchestration consumer together.

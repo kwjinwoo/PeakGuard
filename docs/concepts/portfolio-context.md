@@ -3,7 +3,7 @@ id: portfotrack-context
 title: PortfoTrack Allocation Context
 type: concept
 status: active
-last_verified: 2026-07-06
+last_verified: 2026-07-11
 related:
   - configuration.md
   - data-contracts.md
@@ -99,3 +99,9 @@ external calls rather than being silently ignored.
 Current orchestration resolves usable mapped groups and derives portfolio actions.
 Telegram formatting renders those facts only for already-reportable configured
 stocks and ETFs, with one report-level warning when used context is stale.
+
+Schema 1.0 contains allocation groups, not individual holding tickers. It therefore
+cannot add or remove entries in `config/portfolio.yaml`. The tracked-asset CLI is
+manual and deliberately does not infer holdings from this aggregate snapshot. A
+future synchronization feature requires a separate, explicit PortfoTrack contract
+that supplies stable ticker identity and ownership semantics.

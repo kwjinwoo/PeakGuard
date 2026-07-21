@@ -73,7 +73,8 @@ non-prescriptive and never issues an automatic trading instruction.
 
 ## Configuration
 
-Edit `config/portfolio.yaml` to define tickers, per-ticker MDD thresholds, and global alert thresholds.
+Tracked assets can be managed with the CLI described below. Global alert thresholds
+remain in `config/portfolio.yaml`.
 
 ```yaml
 tickers:
@@ -90,17 +91,116 @@ alert_thresholds:
   bounce_from_bottom_min: 3.0   # alert if price bounces 3%+ from 1-year low
 ```
 
-**Current tracked assets:**
+### Tracked Asset CLI
 
-| Ticker | Name | Exposure |
+Run these commands from the project root. `uv sync` installs the local `peakguard`
+command; `uv run` also ensures the project environment is current before execution.
+
+#### List tracked assets
+
+```bash
+uv run peakguard assets list
+```
+
+The table shows ticker, display name, asset type, MDD threshold, and PortfoTrack
+group. Listing is read-only and performs no market or network request.
+
+#### Add an individual stock
+
+Only `--name` is required. The remaining defaults match PeakGuard's current US-stock
+policy: 15% MDD threshold, USD, `individual_stock`, and `us_equity`.
+
+```bash
+uv run peakguard assets add AAPL --name "Apple"
+```
+
+To enable explicit thesis review for deep-discount portfolio guidance:
+
+```bash
+uv run peakguard assets add AAPL \
+  --name "Apple" \
+  --threshold 12.5 \
+  --asset-type individual_stock \
+  --portfolio-group us_equity \
+  --thesis-required
+```
+
+Available add options:
+
+| Option | Default | Meaning |
 |---|---|---|
-| `AMZN` | Amazon | US individual stock |
-| `MSFT` | Microsoft | US individual stock |
-| `META` | Meta | US individual stock |
-| `NVDA` | Nvidia | US individual stock |
-| `GOOGL` | Google | US individual stock |
-| `360750.KS` | TIGER 미국S&P500 | S&P 500 (`SPY` proxy) |
-| `133690.KS` | TIGER 미국나스닥100 | Nasdaq-100 (`QQQ` proxy) |
+| `--name TEXT` | Required | Human-readable name shown in reports |
+| `--threshold PERCENT` | `15.0` | MDD alert threshold in `(0, 100]` |
+| `--currency CODE` | `USD` | Report price currency; `KRW` uses won formatting |
+| `--asset-type TYPE` | `individual_stock` | `individual_stock`, `core_etf`, `bond_etf`, or `gold_proxy` |
+| `--portfolio-group ID` | `us_equity` | Stable PortfoTrack `asset_id` |
+| `--thesis-required` | Off | Enable explicit thesis policy; valid only for individual stocks |
+| `--proxy-for TICKER` | None | Canonical US-market ticker represented by a wrapper ETF |
+
+For example, a KRW-listed S&P 500 wrapper can be added with explicit ETF metadata:
+
+```bash
+uv run peakguard assets add 360750.KS \
+  --name "TIGER 미국S&P500" \
+  --currency KRW \
+  --asset-type core_etf \
+  --portfolio-group us_equity \
+  --proxy-for SPY
+```
+
+The command rejects duplicate tickers and invalid field combinations before
+changing the file. A successful add takes effect on the next scheduled run; a new
+ticker without remote history is bootstrapped from one year of closing prices.
+
+#### Update a tracked asset
+
+Update only the fields supplied on the command line. Other fields remain unchanged.
+For example, enable explicit thesis review for an existing individual stock:
+
+```bash
+uv run peakguard assets update SPCX --thesis-required
+```
+
+Disable it explicitly with the paired boolean option:
+
+```bash
+uv run peakguard assets update SPCX --no-thesis-required
+```
+
+The update command also accepts `--name`, `--threshold`, `--currency`,
+`--asset-type`, `--portfolio-group`, and `--proxy-for`. At least one update option
+is required, the ticker must already exist, and the complete resulting entry must
+remain valid. For example:
+
+```bash
+uv run peakguard assets update SPCX --threshold 20 --name "SpaceX"
+```
+
+#### Remove a tracked asset
+
+Interactive removal asks for confirmation:
+
+```bash
+uv run peakguard assets remove AAPL
+```
+
+For scripts or other non-interactive use, confirmation can be skipped explicitly:
+
+```bash
+uv run peakguard assets remove AAPL --yes
+```
+
+Removal stops future monitoring but does not delete historical rows already stored
+in the Gist. If the ticker is added again, normal rolling-window processing resumes.
+
+#### Storage and validation behavior
+
+Add, update, and remove commands validate both the complete ticker configuration and
+global alert thresholds before replacing `config/portfolio.yaml`. Replacement is
+atomic, so an invalid command cannot leave a partially written configuration. YAML
+key order is retained, but comments and cosmetic quoting may be normalized when a
+mutation is saved. Review and commit the resulting configuration change through the
+normal project workflow.
 
 ---
 
@@ -113,6 +213,7 @@ src/
     ├── mdd_calc.py    # Pure domain logic (drawdown, Z-score, bounce, rolling ATH)
     ├── storage.py     # CSV serialization/deserialization & local file I/O
     ├── config.py      # YAML config loader
+    ├── cli.py         # Tracked-asset list/add/update/remove command
     ├── portfolio_context.py # Optional PortfoTrack snapshot validation
     ├── portfolio_action.py  # Pure allocation-guidance classification
     ├── fetcher.py     # yfinance wrapper (price & history fetching)
