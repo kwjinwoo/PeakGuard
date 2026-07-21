@@ -84,6 +84,11 @@ atomically replace `config/portfolio.yaml`. Existing key order is retained; comm
 and cosmetic YAML formatting are not part of the persisted contract. Removing a
 ticker does not delete its historical rows from the remote Gist.
 
+Remote history cleanup is deliberately separate from configuration mutation. Use
+the dry-run-first `peakguard history prune` command documented in
+[Operations](../operations.md#manual-history-pruning); scheduled runs never infer
+deletion intent from a missing configuration entry.
+
 The root [README](../../README.md#tracked-asset-cli) is the user-facing command and
 option reference.
 

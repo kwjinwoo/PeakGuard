@@ -17,8 +17,12 @@ from peakguard.config import (
     load_alert_thresholds,
     load_portfolio,
 )
+from peakguard.errors import GistError
+from peakguard.gist_client import read_gist, write_gist
+from peakguard.storage import deserialize_history, serialize_history
 
 _DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "portfolio.yaml"
+_GIST_HISTORY_FILENAME = "peak_prices.csv"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -104,6 +108,27 @@ def _build_parser() -> argparse.ArgumentParser:
         "--yes",
         action="store_true",
         help="Skip the interactive confirmation prompt.",
+    )
+
+    history = commands.add_parser("history", help="Manage remote price history.")
+    history_commands = history.add_subparsers(dest="history_command", required=True)
+    prune = history_commands.add_parser(
+        "prune", help="Preview or remove history for untracked tickers."
+    )
+    prune.add_argument(
+        "--ticker",
+        action="append",
+        help="Untracked ticker to prune; repeat to select more than one.",
+    )
+    prune.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write the pruned history back to the Gist.",
+    )
+    prune.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirm batch pruning of every untracked ticker.",
     )
     return parser
 
@@ -300,6 +325,81 @@ def _update_asset(path: Path, args: argparse.Namespace) -> int:
     return 0
 
 
+def _get_gist_id() -> str:
+    """Read the configured Gist identifier for a history operation."""
+    gist_id = os.environ.get("GIST_ID", "").strip()
+    if not gist_id:
+        raise ValueError("GIST_ID environment variable is required")
+    return gist_id
+
+
+def _prune_history(path: Path, args: argparse.Namespace) -> int:
+    """Preview or explicitly prune history belonging to untracked tickers."""
+    active_tickers = {config.ticker for config in load_portfolio(path)}
+    requested = (
+        {ticker.strip().upper() for ticker in args.ticker} if args.ticker else None
+    )
+    if requested is not None:
+        invalid = sorted(requested & active_tickers)
+        if invalid:
+            raise ValueError(
+                f"cannot prune currently tracked ticker(s): {', '.join(invalid)}"
+            )
+
+    gist_id = _get_gist_id()
+    content = read_gist(gist_id=gist_id, filename=_GIST_HISTORY_FILENAME)
+    history = deserialize_history(content)
+    if requested is None:
+        candidates = sorted(set(history) - active_tickers)
+    else:
+        missing = sorted(requested - set(history))
+        if missing:
+            raise ValueError(f"no remote history for ticker(s): {', '.join(missing)}")
+        candidates = sorted(requested)
+
+    if not candidates:
+        print("No untracked history to prune")
+        return 0
+
+    print(f"{'TICKER':<14} {'ROWS':>8}  DATE RANGE")
+    print(f"{'-' * 14} {'-' * 8}  {'-' * 23}")
+    total_rows = 0
+    for ticker in candidates:
+        records = history[ticker]
+        total_rows += len(records)
+        first_date = min(record.date for record in records)
+        last_date = max(record.date for record in records)
+        suffix = "row" if len(records) == 1 else "rows"
+        print(
+            f"{ticker:<14} {len(records):>4} {suffix:<3}  "
+            f"{first_date} to {last_date}"
+        )
+    print(f"\n{len(candidates)} ticker(s), {total_rows} row(s)")
+
+    if not args.apply:
+        print("Dry run only; use --apply to update the Gist")
+        return 0
+    if requested is None and not args.yes:
+        answer = (
+            input("Prune all listed untracked history from the Gist? [y/N] ")
+            .strip()
+            .lower()
+        )
+        if answer not in {"y", "yes"}:
+            print("Cancelled")
+            return 0
+
+    for ticker in candidates:
+        del history[ticker]
+    write_gist(
+        gist_id=gist_id,
+        filename=_GIST_HISTORY_FILENAME,
+        content=serialize_history(history),
+    )
+    print(f"Pruned {len(candidates)} ticker(s) and {total_rows} row(s)")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the PeakGuard CLI.
 
@@ -312,15 +412,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     try:
-        if args.asset_command == "list":
-            return _list_assets(args.config)
-        if args.asset_command == "add":
-            return _add_asset(args.config, args)
-        if args.asset_command == "update":
-            return _update_asset(args.config, args)
-        if args.asset_command == "remove":
-            return _remove_asset(args.config, args)
-    except (FileNotFoundError, TypeError, ValueError) as exc:
+        if args.command == "assets":
+            if args.asset_command == "list":
+                return _list_assets(args.config)
+            if args.asset_command == "add":
+                return _add_asset(args.config, args)
+            if args.asset_command == "update":
+                return _update_asset(args.config, args)
+            if args.asset_command == "remove":
+                return _remove_asset(args.config, args)
+        if args.command == "history" and args.history_command == "prune":
+            return _prune_history(args.config, args)
+    except (FileNotFoundError, GistError, TypeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     parser.error("unknown command")

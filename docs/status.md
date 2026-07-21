@@ -31,8 +31,8 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
 - Daily output is one consolidated Telegram message containing active alerts, fetch failures, and data health.
 - PortfoTrack context does not expand the report universe: quiet configured tickers
   and unrelated portfolio groups remain omitted.
-- Tests: **365 passed** on 2026-07-21.
-- Wiki validation: **39 documents passed** on 2026-07-21.
+- Tests: **371 passed** on 2026-07-21.
+- Wiki validation: **40 documents passed** on 2026-07-21.
 - Pre-commit: all configured hooks passed on 2026-07-21.
 
 ## Implemented capabilities
@@ -41,6 +41,9 @@ This page is the short starting snapshot for maintainers and LLM agents. It desc
   Mutations reject duplicate or unknown tickers, require removal confirmation,
   validate the complete generated configuration, and replace it atomically without
   making network calls.
+- Manual `peakguard history prune` preview and apply workflow for remote rows that no
+  longer belong to tracked tickers. Active tickers are protected, scheduled runs do
+  not prune, and batch application requires a second confirmation.
 - One-year price-history bootstrap for newly configured tickers.
 - Daily close fetch and date-based history upsert.
 - Inclusive 365-day rolling ATH.

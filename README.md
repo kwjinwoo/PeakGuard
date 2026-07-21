@@ -193,6 +193,51 @@ uv run peakguard assets remove AAPL --yes
 Removal stops future monitoring but does not delete historical rows already stored
 in the Gist. If the ticker is added again, normal rolling-window processing resumes.
 
+#### Prune removed ticker history
+
+Gist history is never pruned automatically by the scheduled workflow. The manual
+command defaults to a dry run and lists untracked tickers with their row counts and
+date ranges:
+
+```bash
+uv run peakguard history prune
+```
+
+Preview one removed ticker, then apply only that deletion:
+
+```bash
+uv run peakguard history prune --ticker AMZN
+uv run peakguard history prune --ticker AMZN --apply
+```
+
+`--ticker` can be repeated to select several removed tickers. The command refuses to
+prune a ticker that still exists in `config/portfolio.yaml`.
+
+Applying every untracked candidate asks for an additional confirmation:
+
+```bash
+uv run peakguard history prune --apply
+```
+
+For deliberate non-interactive batch cleanup, supply both mutation flags:
+
+```bash
+uv run peakguard history prune --apply --yes
+```
+
+History commands require `GIST_ID` and `GIST_PAT` in the process environment. A
+local `.env` file is not loaded automatically; export it before running the command:
+
+```bash
+set -a
+source .env
+set +a
+uv run peakguard history prune --ticker AMZN
+```
+
+The command first parses the complete remote CSV and writes through the same Gist
+client used by the daily service. Without `--apply`, it never modifies remote data.
+
 #### Storage and validation behavior
 
 Add, update, and remove commands validate both the complete ticker configuration and

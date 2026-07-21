@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from peakguard.cli import main
@@ -219,3 +220,154 @@ def test_update_requires_at_least_one_change(tmp_path: Path, capsys) -> None:
     assert exit_code == 2
     assert "at least one" in capsys.readouterr().err
     assert config_path.read_text(encoding="utf-8") == before
+
+
+_REMOTE_HISTORY = (
+    "ticker,date,price\n"
+    "AMZN,2026-07-18,220.0\n"
+    "OLD,2026-07-17,100.0\n"
+    "OLD,2026-07-18,101.0\n"
+)
+
+
+def test_history_prune_preview_lists_only_untracked_history(
+    tmp_path: Path, mocker, monkeypatch, capsys
+) -> None:
+    """Default prune is a read-only preview of history absent from config."""
+    config_path = tmp_path / "portfolio.yaml"
+    _write_config(config_path)
+    monkeypatch.setenv("GIST_ID", "gist-123")
+    mock_read = mocker.patch("peakguard.cli.read_gist", return_value=_REMOTE_HISTORY)
+    mock_write = mocker.patch("peakguard.cli.write_gist")
+
+    exit_code = main(["--config", str(config_path), "history", "prune"])
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "OLD" in output
+    assert "2 rows" in output
+    assert "2026-07-17" in output
+    assert "2026-07-18" in output
+    assert "AMZN" not in output
+    assert "Dry run" in output
+    mock_read.assert_called_once_with(gist_id="gist-123", filename="peak_prices.csv")
+    mock_write.assert_not_called()
+
+
+def test_history_prune_rejects_currently_tracked_ticker(
+    tmp_path: Path, mocker, monkeypatch, capsys
+) -> None:
+    """A ticker still present in configuration can never be pruned."""
+    config_path = tmp_path / "portfolio.yaml"
+    _write_config(config_path)
+    monkeypatch.setenv("GIST_ID", "gist-123")
+    mocker.patch("peakguard.cli.read_gist", return_value=_REMOTE_HISTORY)
+    mock_write = mocker.patch("peakguard.cli.write_gist")
+
+    exit_code = main(
+        [
+            "--config",
+            str(config_path),
+            "history",
+            "prune",
+            "--ticker",
+            "AMZN",
+            "--apply",
+        ]
+    )
+
+    assert exit_code == 2
+    assert "currently tracked" in capsys.readouterr().err
+    mock_write.assert_not_called()
+
+
+def test_history_prune_apply_removes_only_requested_ticker(
+    tmp_path: Path, mocker, monkeypatch
+) -> None:
+    """Explicit ticker and apply update the Gist while retaining active history."""
+    config_path = tmp_path / "portfolio.yaml"
+    _write_config(config_path)
+    monkeypatch.setenv("GIST_ID", "gist-123")
+    mocker.patch("peakguard.cli.read_gist", return_value=_REMOTE_HISTORY)
+    mock_write = mocker.patch("peakguard.cli.write_gist")
+
+    exit_code = main(
+        [
+            "--config",
+            str(config_path),
+            "history",
+            "prune",
+            "--ticker",
+            "OLD",
+            "--apply",
+        ]
+    )
+
+    assert exit_code == 0
+    content = mock_write.call_args.kwargs["content"]
+    assert "AMZN,2026-07-18,220.0" in content
+    assert "OLD" not in content
+
+
+def test_history_prune_batch_apply_can_be_cancelled(
+    tmp_path: Path, mocker, monkeypatch, capsys
+) -> None:
+    """Applying all untracked candidates requires another confirmation."""
+    config_path = tmp_path / "portfolio.yaml"
+    _write_config(config_path)
+    monkeypatch.setenv("GIST_ID", "gist-123")
+    monkeypatch.setattr("builtins.input", lambda _: "n")
+    mocker.patch("peakguard.cli.read_gist", return_value=_REMOTE_HISTORY)
+    mock_write = mocker.patch("peakguard.cli.write_gist")
+
+    exit_code = main(["--config", str(config_path), "history", "prune", "--apply"])
+
+    assert exit_code == 0
+    assert "Cancelled" in capsys.readouterr().out
+    mock_write.assert_not_called()
+
+
+def test_history_prune_batch_apply_yes_skips_prompt_and_writes(
+    tmp_path: Path, mocker, monkeypatch
+) -> None:
+    """Both mutation flags authorize non-interactive batch cleanup."""
+    config_path = tmp_path / "portfolio.yaml"
+    _write_config(config_path)
+    monkeypatch.setenv("GIST_ID", "gist-123")
+    monkeypatch.setattr(
+        "builtins.input", lambda _: pytest.fail("confirmation prompt was called")
+    )
+    mocker.patch("peakguard.cli.read_gist", return_value=_REMOTE_HISTORY)
+    mock_write = mocker.patch("peakguard.cli.write_gist")
+
+    exit_code = main(
+        [
+            "--config",
+            str(config_path),
+            "history",
+            "prune",
+            "--apply",
+            "--yes",
+        ]
+    )
+
+    assert exit_code == 0
+    content = mock_write.call_args.kwargs["content"]
+    assert "AMZN,2026-07-18,220.0" in content
+    assert "OLD" not in content
+
+
+def test_history_prune_requires_gist_id(
+    tmp_path: Path, mocker, monkeypatch, capsys
+) -> None:
+    """A missing Gist identifier fails before any remote request."""
+    config_path = tmp_path / "portfolio.yaml"
+    _write_config(config_path)
+    monkeypatch.delenv("GIST_ID", raising=False)
+    mock_read = mocker.patch("peakguard.cli.read_gist")
+
+    exit_code = main(["--config", str(config_path), "history", "prune"])
+
+    assert exit_code == 2
+    assert "GIST_ID" in capsys.readouterr().err
+    mock_read.assert_not_called()

@@ -10,6 +10,7 @@ related:
   - 0004-separate-price-levels-from-portfolio-actions.md
   - 0005-scope-portfolio-context-to-reportable-assets.md
   - 0006-three-section-report-policy.md
+  - 0007-manual-history-pruning.md
   - ../proposals/README.md
 ---
 
@@ -25,6 +26,7 @@ Architecture Decision Records (ADRs) preserve the rationale for choices that con
 - [ADR-0004: Separate price levels from portfolio actions](0004-separate-price-levels-from-portfolio-actions.md)
 - [ADR-0005: Scope portfolio context to reportable assets](0005-scope-portfolio-context-to-reportable-assets.md)
 - [ADR-0006: Organize reports into three review sections](0006-three-section-report-policy.md)
+- [ADR-0007: Require explicit manual history pruning](0007-manual-history-pruning.md)
 
 ## Template
 

@@ -3,17 +3,19 @@ id: operations
 title: Operations
 type: operations
 status: active
-last_verified: 2026-07-06
+last_verified: 2026-07-21
 related:
   - architecture.md
   - runbooks/README.md
   - concepts/data-contracts.md
+  - decisions/0007-manual-history-pruning.md
 code:
   - .github/workflows/mdd-check.yml
   - src/peakguard/main.py
   - src/peakguard/gist_client.py
   - src/peakguard/notifier.py
   - src/peakguard/portfolio_context.py
+  - src/peakguard/cli.py
 ---
 
 # Operations
@@ -74,6 +76,33 @@ ticker,date,price
 ```
 
 Rows are sorted by ticker and date. Local storage functions exist for development and testing, but the production pipeline reads and writes through `peakguard.gist_client`.
+
+### Manual history pruning
+
+Removing a ticker from configuration does not remove its existing Gist rows, and the
+scheduled workflow never prunes them automatically. Preview all untracked history:
+
+```bash
+uv run peakguard history prune
+```
+
+Preview or apply one explicitly selected ticker:
+
+```bash
+uv run peakguard history prune --ticker AMZN
+uv run peakguard history prune --ticker AMZN --apply
+```
+
+Applying every displayed untracked candidate requires an interactive confirmation.
+Non-interactive operation must provide both flags:
+
+```bash
+uv run peakguard history prune --apply --yes
+```
+
+The command requires `GIST_ID` and `GIST_PAT`, displays row counts and date ranges,
+and refuses to delete history for any currently configured ticker. Dry-run output
+does not write to the Gist. See [ADR-0007](decisions/0007-manual-history-pruning.md).
 
 ## Failure behavior
 
